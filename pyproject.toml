@@ -5,6 +5,8 @@ description = "A tool for polling Hacker News for new stories"
 requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31.0",
+    "beautifulsoup4>=4.12.2",
+    "html2text>=2020.1.16",
 ]
 
 [project.optional-dependencies]
