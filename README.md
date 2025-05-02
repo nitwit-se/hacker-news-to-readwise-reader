@@ -6,7 +6,7 @@ A Python application that polls Hacker News for new stories since the last poll 
 
 - Fetches new stories from Hacker News API
 - Stores story data in a local SQLite database
-- Fetches content from story URLs and converts to markdown
+- Intelligently extracts main content from story URLs, filtering out navigation, ads, and other non-content elements
 - Implements robust error handling with retry mechanism
 - Special handling for sites that block content fetching (e.g., Twitter/X)
 - Tracks when the application was last run
@@ -16,6 +16,10 @@ A Python application that polls Hacker News for new stories since the last poll 
 
 - Python 3.12+
 - `uv` Python package manager
+- Dependencies (automatically installed):
+  - requests: HTTP library for API calls
+  - beautifulsoup4: For HTML parsing and content extraction
+  - html2text: For HTML to markdown conversion
 
 ## Installation
 
@@ -27,7 +31,7 @@ A Python application that polls Hacker News for new stories since the last poll 
    ./setup.sh
    ```
 
-   Or set up manually with `uv`:
+   Or set up manually with `uv` (the recommended package manager for this project):
    ```
    # Create a virtual environment
    uv venv
@@ -44,6 +48,8 @@ A Python application that polls Hacker News for new stories since the last poll 
    # For development dependencies
    uv pip install -e ".[dev]"
    ```
+
+   > **Important**: This project uses `uv` for Python package management rather than pip. Always use `uv pip` commands for installing packages to ensure proper dependency resolution.
 
 ## Usage
 
@@ -76,8 +82,15 @@ Options:
 1. The program checks when it was last run (stored in the SQLite database)
 2. It fetches new stories from the Hacker News API
 3. New stories are stored in the database
-4. For a configurable number of stories, the content at the URLs is fetched and converted to markdown:
+4. For a configurable number of stories, the content at the URLs is fetched and processed:
    - New stories are prioritized for content fetching
+   - **Advanced content extraction** identifies and extracts the primary article content:
+     - Searches for content containers using CSS selectors (`article`, `main`, `.content`, etc.)
+     - Falls back to identifying the element with most textual content
+     - Filters out navigation menus, ads, footers, and other non-content elements
+     - Removes social media buttons, copyright notices, and other distractions
+     - Cleans the resulting markdown to focus on actual article content
+   - Clean markdown summaries present the most relevant information
    - URLs from sites that block content fetching (like Twitter) are automatically skipped
    - Transient errors are retried with exponential backoff
    - Error information is tracked in the database

@@ -164,7 +164,7 @@ def fetch_url_content(url, timeout=10):
         raise ContentFetchError(url, "UnexpectedError", str(e))
 
 def html_to_markdown(html_content):
-    """Convert HTML content to markdown.
+    """Convert HTML content to markdown, extracting main article content.
     
     Args:
         html_content (str): HTML content to convert
@@ -176,27 +176,128 @@ def html_to_markdown(html_content):
         return None
         
     try:
-        # First use BeautifulSoup to clean up the HTML
+        # Parse with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Remove script and style elements
-        for script in soup(["script", "style", "nav", "footer", "aside"]):
-            script.extract()
+        # Remove non-content elements
+        for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+            element.decompose()
+            
+        # Remove common ad/nav class patterns
+        import re
+        for element in soup.find_all(class_=re.compile('(nav|menu|header|footer|sidebar|banner|ad|widget|cookie|popup|social|comment)')):
+            element.decompose()
+            
+        # Find the main content
+        # Strategies in priority order:
+        main_content = None
         
-        # Get text content
-        text = soup.get_text()
+        # 1. Look for common content containers
+        for selector in ['article', 'main', '.content', '#content', '.post', '.entry', '.article', '[role="main"]']:
+            try:
+                content_element = soup.select_one(selector)
+                if content_element and len(content_element.get_text(strip=True)) > 200:  # At least 200 chars
+                    main_content = content_element
+                    break
+            except Exception:
+                continue
+        
+        # 2. If no content container found, use heuristic to find the div with most text
+        if not main_content:
+            max_text_length = 0
+            best_div = None
+            for div in soup.find_all('div'):
+                text_length = len(div.get_text(strip=True))
+                if text_length > max_text_length and text_length > 200:  # At least 200 chars
+                    max_text_length = text_length
+                    best_div = div
+            
+            if best_div:
+                main_content = best_div
+        
+        # Get content as HTML
+        if main_content:
+            logger.info("Found main content element")
+            content_html = str(main_content)
+        else:
+            logger.info("No main content found, using body")
+            content_html = str(soup.body) if soup.body else str(soup)
         
         # Convert to markdown using html2text
         h = html2text.HTML2Text()
         h.ignore_links = False
         h.ignore_images = False
         h.body_width = 0  # No wrapping
-        markdown = h.handle(str(soup))
+        markdown = h.handle(content_html)
+        
+        # Post-process markdown - remove excessive blank lines
+        markdown = re.sub(r'\n{3,}', '\n\n', markdown)
         
         return markdown
     except Exception as e:
-        print(f"Error converting HTML to markdown: {e}")
+        logger.error(f"Error converting HTML to markdown: {e}")
         return None
+
+def clean_markdown_content(markdown):
+    """Clean and filter markdown content to remove unnecessary elements.
+    
+    Args:
+        markdown (str): Raw markdown content
+        
+    Returns:
+        str: Cleaned markdown content
+    """
+    if not markdown:
+        return ""
+    
+    import re
+    
+    # Remove any reference-style links that might appear at the end
+    markdown = re.sub(r'\n\[\d+\]: http[^\n]+', '', markdown)
+    
+    # Remove navigation/footer links (often appear as a series of short links)
+    markdown = re.sub(r'(\n\* \[[^\]]{1,20}\]\([^)]+\)){3,}', '', markdown)
+    
+    # Remove consecutive duplicate link patterns (often navigation menus)
+    markdown = re.sub(r'(\[[^\]]+\]\([^)]+\)\s*){3,}', '', markdown)
+    
+    # Remove social media links
+    social_patterns = [
+        r'\[[^\]]*(?:Facebook|Twitter|LinkedIn|Instagram|Share|Follow)[^\]]*\]\([^)]+\)',
+        r'\[[^\]]*(?:facebook|twitter|linkedin|instagram|share|follow)[^\]]*\]\([^)]+\)'
+    ]
+    for pattern in social_patterns:
+        markdown = re.sub(pattern, '', markdown)
+    
+    # Remove copyright notices
+    markdown = re.sub(r'©\s*\d{4}[^\n]*', '', markdown)
+    
+    # Remove consecutive short lines (often navigation or footer items)
+    lines = markdown.split('\n')
+    filtered_lines = []
+    
+    # Filter out lines that are likely not main content
+    for i, line in enumerate(lines):
+        # Skip very short lines that appear in groups (often menus)
+        if (len(line.strip()) < 30 and i+1 < len(lines) and i+2 < len(lines) and 
+            len(lines[i+1].strip()) < 30 and len(lines[i+2].strip()) < 30):
+            # But keep headings
+            if not line.startswith('#') and not line.startswith('##'):
+                continue
+                
+        # Skip lines that are just separator patterns
+        if re.match(r'^[\-\_\*\=\~\+]{3,}$', line.strip()):
+            continue
+            
+        filtered_lines.append(line)
+    
+    # Join the filtered lines back together
+    cleaned_markdown = '\n'.join(filtered_lines)
+    
+    # Remove excessive blank lines (more than 2 in a row)
+    cleaned_markdown = re.sub(r'\n{3,}', '\n\n', cleaned_markdown)
+    
+    return cleaned_markdown
 
 def get_content_summary(markdown, max_chars=200):
     """Get a summary of markdown content.
@@ -210,14 +311,37 @@ def get_content_summary(markdown, max_chars=200):
     """
     if not markdown:
         return ""
-        
-    # Remove extra whitespace and newlines
-    cleaned = ' '.join(markdown.split())
+    
+    # First clean the markdown content
+    cleaned_markdown = clean_markdown_content(markdown)
+    
+    # Extract the first few paragraphs
+    paragraphs = [p for p in cleaned_markdown.split('\n\n') if p.strip()]
+    
+    # Use the first one or two paragraphs depending on length
+    summary = ""
+    for p in paragraphs:
+        if len(summary) + len(p) < max_chars * 1.5:  # Allow a bit more than max_chars to get complete paragraphs
+            summary += p.strip() + " "
+        else:
+            break
+    
+    # Remove markdown formatting from the summary
+    import re
+    # Remove links, keep text: [text](link) -> text
+    summary = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', summary)
+    # Remove image references: ![alt](link) -> alt
+    summary = re.sub(r'!\[([^\]]+)\]\([^)]+\)', r'\1', summary)
+    # Remove formatting markers like * _ ~
+    summary = re.sub(r'[*_~]{1,2}([^*_~]+)[*_~]{1,2}', r'\1', summary)
+    
+    # Remove extra whitespace
+    summary = ' '.join(summary.split())
     
     # Truncate to max_chars
-    if len(cleaned) > max_chars:
-        return cleaned[:max_chars] + "..."
-    return cleaned
+    if len(summary) > max_chars:
+        return summary[:max_chars] + "..."
+    return summary
 
 def fetch_and_process_content(url):
     """Fetch URL content and convert to markdown.
@@ -239,14 +363,21 @@ def fetch_and_process_content(url):
             logger.warning(f"Empty HTML content returned for {url}")
             return None, None
             
+        # Convert HTML to markdown with main content extraction
         markdown = html_to_markdown(html_content)
         if not markdown:
             logger.warning(f"HTML to markdown conversion failed for {url}")
             raise ContentFetchError(url, "ConversionError", "Failed to convert HTML to markdown")
             
-        summary = get_content_summary(markdown)
+        # Clean the markdown content to remove navigation, ads, etc.
+        cleaned_markdown = clean_markdown_content(markdown)
         
-        return markdown, summary
+        # Generate a summary from the cleaned content
+        summary = get_content_summary(cleaned_markdown)
+        
+        logger.info(f"Successfully extracted and cleaned content from {url}")
+        
+        return cleaned_markdown, summary
     except ContentFetchError:
         # Pass through ContentFetchError exceptions
         raise

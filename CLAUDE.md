@@ -116,6 +116,67 @@ The `content_fetched` field uses the following status codes:
 - `2`: Content fetch was attempted but failed with an error
 - `3`: Content is known to be unavailable (e.g., Twitter URLs)
 
+## Content Extraction Strategy
+
+The project uses a sophisticated approach to extract meaningful content from web pages while excluding navigation, ads, and other non-content elements:
+
+### 1. Content Identification Heuristics
+
+The content extraction process follows a multi-stage approach:
+
+1. **Main Content Container Identification**:
+   - Searches for common content container elements using selectors like `article`, `main`, `.content`, `#content`
+   - Falls back to finding the div with the most text content if no identifiable container exists
+   - Requires a minimum text length (200 chars) to qualify as main content
+
+2. **Non-Content Element Removal**:
+   - Removes script, style, nav, header, footer, and aside elements
+   - Filters out elements with class names matching navigation patterns
+   - Removes social media buttons and copyright notices
+
+3. **Content Cleaning**:
+   - Removes reference-style links that often appear at the end of articles
+   - Filters out consecutive short lines that are likely menu items
+   - Preserves headings and meaningful paragraph text
+   - Cleans up excessive blank lines
+
+4. **Summary Generation**:
+   - Extracts first few paragraphs to create a meaningful summary
+   - Removes markdown formatting from the summary for clean display
+   - Truncates to desired length while preserving sentence structure
+
+This approach balances effectiveness with simplicity by using existing dependencies (BeautifulSoup and html2text) without adding additional requirements. It provides high-quality content extraction without the overhead of more complex machine learning-based solutions.
+
+### Benefits of This Approach
+
+- **Progressive Enhancement**: Builds on existing functionality rather than replacing it
+- **Minimal Dependencies**: Leverages already-required libraries
+- **Targeted Extraction**: Focuses specifically on article content
+- **Maintainable Code**: Clear separation of concerns with distinct processing stages
+- **Adaptable**: Works with a wide variety of web page structures
+
+## Package Management with uv
+
+This project uses `uv` for Python package management rather than pip. Key benefits include:
+
+- **Performance**: Much faster dependency resolution and installation 
+- **Reproducibility**: Consistent environment creation across different systems
+- **Compatibility**: Better alignment with modern Python packaging standards (PEP 621)
+
+Always use `uv` commands for package management, for example:
+```bash
+# Install dependencies
+uv pip install -e .
+
+# Install development dependencies
+uv pip install -e ".[dev]"
+
+# Add a new dependency
+uv pip install new-package-name
+```
+
+NEVER use pip directly in this project as it would bypass uv's dependency resolution.
+
 ## Future Enhancements
 
 Potential improvements to consider:
@@ -125,7 +186,7 @@ Potential improvements to consider:
 - Add export functionality to CSV or JSON formats
 - Implement concurrent API requests for faster story fetching
 - Add a full test suite with pytest
-- Implement full content analysis and improved summaries with NLP
+- Further enhance content extraction with more advanced NLP techniques
 - Add options to save favorite stories for later reading
 - Create a notification system for high-scoring stories
 - Add support for comments and discussion threads

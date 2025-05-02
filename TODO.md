@@ -40,6 +40,14 @@
 - [x] Add error tracking in database
 - [x] Prioritize content fetching for new stories
 
+## Advanced Content Extraction ✅
+- [x] Research content extraction techniques and libraries
+- [x] Implement intelligent main content detection
+- [x] Add non-content element filtering (navigation, ads, footers)
+- [x] Create markdown content cleaning functionality
+- [x] Improve summary generation from extracted content
+- [x] Document content extraction strategy
+
 ## Optional Enhancements (Future Work)
 - [ ] Add story filtering options
 - [x] Implement command-line arguments
