@@ -29,48 +29,41 @@ def get_relevance_score(story):
     prompt = f"Title: {title}\nDomain: {domain}\nURL: {url}"
     
     # Interest categories defined in the system prompt
-    system_prompt = """Evaluate how strongly this Hacker News story would match the following interest categories:
+    system_prompt = """You are a personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based ONLY on its title and URL.
 
-1. Technology & Tools:
-   - Emacs, Linux, NixOS, MacOS, Apple hardware
-   - E-book readers and related technology
+To help you make a judgement here are some examples of things that interest me as well as things that I know do not interest me. These are examples.
 
-2. Programming & Computer Science:
-   - Python, Julia, Lisp
-   - Functional programming, logic programming
-   - Any interesting programming language concepts
+MY INTERESTS:
+- Programming and software development
+- AI, machine learning, and LLMs
+- Linux, Emacs, NixOS
+- Computer science theory and algorithms
+- Cybersecurity, hacking techniques, and security vulnerabilities
+- Science fiction concepts and technology
+- Hardware hacking and electronics
+- Systems programming and low-level computing
+- Novel computing paradigms and research
+- Tech history and vintage computing
+- Mathematics and computational theory
+- Cool toys and gadgetst
+- Climate Change and Mitigation
 
-3. Security & Hacking:
-   - Infosec, cybersecurity, penetration testing
-   - Ethical hacking, cracking (in educational context)
-   - Security research, vulnerabilities
+NOT MY INTERESTS:
+- Business/startup funding news
+- Tech company stock prices or financial performance
+- Product announcements (unless truly innovative)
+- General tech industry news without technical depth
+- Political news (unless directly related to technology policy or climate change)
+- General mainstream technology coverage
 
-4. Projects & Creativity:
-   - DIY/home projects with technology
-   - Creative coding, generative art
-   - Hardware hacking, electronics
-
-5. Science & Research:
-   - AI, machine learning, LLMs
-   - Climate change, environmental tech
-   - Scientific computing
-
-6. Books & Reading:
-   - Technical books, programming books
-   - E-book technology, digital reading
-
-Rate the story's relevance to these interests on a scale from 0-100, where:
-- 0-25: Not relevant to these interests
-- 26-50: Slightly relevant to these interests
-- 51-75: Moderately relevant to these interests
-- 76-100: Highly relevant to these interests
+Rate the story's relevance to these interests on a scale from 0-100, where 0 would be completely uninteresting and 100 would be almost guaranteed to be of interest to me.
 
 ONLY respond with a single integer between 0 and 100, and nothing else."""
     
     # Call Claude API to classify
     try:
         message = client.messages.create(
-            model="claude-3-haiku-20240307",  # Using Haiku for speed and cost
+            model="claude-3-5-haiku-latest",  # Using Claude 3.5 Haiku for better results
             max_tokens=100,                   # Tokens for response
             temperature=0,                    # No randomness for consistent results
             system=system_prompt,
@@ -183,7 +176,7 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
     
     try:
         message = client.messages.create(
-            model="claude-3-haiku-20240307",
+            model="claude-3-5-haiku-latest",
             max_tokens=100,
             temperature=0,
             system=system_prompt,
@@ -277,7 +270,7 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
     # Call Claude API to classify
     try:
         message = await async_client.messages.create(
-            model="claude-3-haiku-20240307",  # Using Haiku for speed and cost
+            model="claude-3-5-haiku-latest",  # Using Claude 3.5 Haiku for better results
             max_tokens=100,                   # Tokens for response
             temperature=0,                    # No randomness for consistent results
             system=system_prompt,

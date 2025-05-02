@@ -8,7 +8,7 @@ A high-performance Python application that polls Hacker News for high-quality st
 - Choose between top, best, or new story feeds
 - Processes up to 500 stories in a single request with asynchronous processing
 - Tracks and updates story scores over time
-- Filters stories by age (default 24 hours) and quality (default score ≥ 10)
+- Filters stories by age (default 24 hours) and quality (default score ≥ 30)
 - Uses asynchronous requests with high concurrency for optimal performance
 - Stores and updates story data in a local SQLite database
 - Intelligently tracks processed stories to minimize redundant fetching
@@ -57,7 +57,7 @@ A high-performance Python application that polls Hacker News for high-quality st
 
 ## Usage
 
-To poll for stories from the past 24 hours with scores ≥ 10:
+To poll for stories from the past 24 hours with scores ≥ 30:
 
 ```
 # Activate the environment if not already activated
@@ -77,7 +77,7 @@ python src/main.py
 Options:
 
 - `--hours N`: Specify how many hours back to look for stories (default: 24)
-- `--min-score N`: Specify minimum score threshold for displaying stories (default: 10)
+- `--min-score N`: Specify minimum score threshold for displaying stories (default: 30)
 - `--source [top|best|new]`: Select which Hacker News feed to use (default: top)
 - `--limit N`: Maximum number of stories to fetch from source (default: 500)
 - `--claude`: Use Claude AI to calculate relevance scores (requires ANTHROPIC_API_KEY)
@@ -126,7 +126,7 @@ python src/background_scorer.py --batch-size 20 --max-stories 100
    - Applies time and score filters directly during processing
 
 2. For each story, it:
-   - Filters by timeframe (default: 24 hours) and score (default: ≥ 10)
+   - Filters by timeframe (default: 24 hours) and score (default: ≥ 30)
    - Adds new stories to the database
    - Updates scores for existing stories
    - Tracks the oldest ID for optimization
@@ -178,12 +178,19 @@ See [Database Schema](docs/db_schema.md) for more details on the database struct
 When using the `--claude` flag, the application leverages Claude AI to calculate relevance scores for stories:
 
 - Current interest categories:
-  - Technology & Tools: Emacs, Linux, NixOS, MacOS, Apple hardware, e-book readers
-  - Programming & Computer Science: Python, Julia, Lisp, functional programming, logic programming
-  - Security & Hacking: InfoSec, cybersecurity, ethical hacking, cracking
-  - Projects & Creativity: DIY/home projects, creative coding, hardware hacking
-  - Science & Research: AI, machine learning, climate change, scientific computing
-  - Books & Reading: Technical books, e-book technology, digital reading
+  - Programming and software development
+  - AI, machine learning, and LLMs
+  - Linux, Emacs, NixOS
+  - Computer science theory and algorithms
+  - Cybersecurity, hacking techniques, and security vulnerabilities
+  - Science fiction concepts and technology
+  - Hardware hacking and electronics
+  - Systems programming and low-level computing
+  - Novel computing paradigms and research
+  - Tech history and vintage computing
+  - Mathematics and computational theory
+  - Cool toys and gadgets
+  - Climate Change and Mitigation
 
 To customize these interests, edit the system prompt in `src/classifier.py`.
 

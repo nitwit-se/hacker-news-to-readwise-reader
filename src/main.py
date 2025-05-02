@@ -56,7 +56,7 @@ def format_story(story):
     
     return output
 
-async def poll_hacker_news_async(hours=24, min_score=10, source='top', limit=500, min_relevance=None):
+async def poll_hacker_news_async(hours=24, min_score=30, source='top', limit=500, min_relevance=None):
     """Poll Hacker News for high-quality stories using an optimized approach.
     
     Args:
@@ -110,7 +110,7 @@ def main():
     parser = argparse.ArgumentParser(description='Poll Hacker News for recent high-quality stories')
     parser.add_argument('--hours', type=int, default=24,
                         help='Number of hours to look back')
-    parser.add_argument('--min-score', type=int, default=10,
+    parser.add_argument('--min-score', type=int, default=30,
                         help='Minimum score threshold for displaying stories')
     parser.add_argument('--source', type=str, choices=['top', 'best', 'new'], default='top',
                         help='Source to fetch stories from (top, best, or new)')

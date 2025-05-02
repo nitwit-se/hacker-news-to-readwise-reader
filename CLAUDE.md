@@ -78,7 +78,7 @@ python src/main.py
 
 4. **Real-time Filtering**: The application filters stories by:
    - Time (default: stories from the past 24 hours)
-   - Quality (default: stories with scores ≥ 10)
+   - Quality (default: stories with scores ≥ 30)
    - Source selection (top, best, or new stories)
 
 5. **Interest-Based Filtering (Optional)**: When using the `--claude` flag:
