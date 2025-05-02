@@ -71,12 +71,28 @@ def retry_with_backoff(max_retries=3, initial_backoff=1, max_backoff=10):
 
 # List of problematic domains that need special handling
 PROBLEMATIC_DOMAINS = {
+    # Social media sites
     'twitter.com': 'Twitter blocks most scraping attempts',
     'x.com': 'Twitter (X) blocks most scraping attempts',
     't.co': 'Twitter shortlink service blocks most scraping attempts',
     'instagram.com': 'Instagram blocks most scraping attempts',
     'facebook.com': 'Facebook blocks most scraping attempts',
     'linkedin.com': 'LinkedIn blocks most scraping attempts',
+    
+    # Common paywalled news sites
+    'wsj.com': 'Content behind paywall (Wall Street Journal)',
+    'economist.com': 'Content behind paywall (The Economist)',
+    'nytimes.com': 'Content behind paywall (New York Times)',
+    'ft.com': 'Content behind paywall (Financial Times)',
+    'washingtonpost.com': 'Content behind paywall (Washington Post)',
+    'bloomberg.com': 'Content behind paywall (Bloomberg)',
+    'newyorker.com': 'Content behind paywall (The New Yorker)',
+    'wired.com': 'Content behind paywall (Wired)',
+    'medium.com': 'May have metered paywall (Medium)',
+    'substack.com': 'May have subscription requirements (Substack)',
+    
+    # Sites with strong anti-scraping measures
+    'phys.org': 'Site implements anti-scraping protection',
 }
 
 @retry_with_backoff(max_retries=2)
@@ -113,19 +129,30 @@ def fetch_url_content(url, timeout=10):
             logger.info(f"Skipping known problematic domain {domain}: {reason}")
             raise ContentFetchError(url, "ProblematicDomain", reason)
     
-    # Vary user agent slightly to avoid detection
+    # More realistic and recent user agents to better evade detection
     user_agents = [
-        'Mozilla/5.0 (compatible; HackerNewsPoller/0.1; +https://github.com/example/hn-poller)',
-        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/91.0.4472.114 Safari/537.36',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/92.0.4515.107 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/122.0.2365.92',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:124.0) Gecko/20100101 Firefox/124.0',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
     ]
     
+    # More complete headers that mimic a real browser
     headers = {
         'User-Agent': random.choice(user_agents),
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Pragma': 'no-cache',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Cache-Control': 'max-age=0',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'DNT': '1',
     }
     
     try:
@@ -135,10 +162,14 @@ def fetch_url_content(url, timeout=10):
         # Handle specific status codes
         if response.status_code == 200:
             return response.text
+        elif response.status_code == 402:
+            raise ContentFetchError(url, "PaywallError", "Content behind paywall or subscription required", status_code=402)
         elif response.status_code == 404:
             raise ContentFetchError(url, "NotFound", "Page not found", status_code=404)
         elif response.status_code == 403:
             raise ContentFetchError(url, "Forbidden", "Access forbidden", status_code=403)
+        elif response.status_code == 422:
+            raise ContentFetchError(url, "ContentError", "Server rejected request - possibly bot protection", status_code=422)
         elif response.status_code == 429:
             raise ContentFetchError(url, "RateLimited", "Too many requests", status_code=429)
         else:
@@ -179,13 +210,23 @@ def html_to_markdown(html_content):
         # Parse with BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
         
-        # Remove non-content elements
-        for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+        # Remove non-content elements - expanded to include more technical elements
+        for element in soup.find_all(['script', 'style', 'nav', 'header', 'footer', 'aside', 'noscript', 
+                                      'iframe', 'svg', 'canvas', 'code', 'pre', 'form', 'button',
+                                      'input', 'select', 'option', 'textarea']):
             element.decompose()
             
-        # Remove common ad/nav class patterns
+        # Remove common ad/nav class patterns - expanded to include code-related classes
         import re
-        for element in soup.find_all(class_=re.compile('(nav|menu|header|footer|sidebar|banner|ad|widget|cookie|popup|social|comment)')):
+        for element in soup.find_all(class_=re.compile('(nav|menu|header|footer|sidebar|banner|ad|widget|cookie|popup|social|comment|code|syntax|highlight|editor|terminal|console|snippet|gist)')):
+            element.decompose()
+            
+        # Remove elements with common advertisement/tracking attribute patterns
+        for element in soup.find_all(attrs={"id": re.compile('(ad|banner|promo|sponsor|comment|reply|code|snippet|gist)')}):
+            element.decompose()
+            
+        # Remove elements with data-ad attributes and other common ad-related attributes
+        for element in soup.find_all(lambda tag: any(attr for attr in tag.attrs if attr.startswith('data-') and ('ad' in attr or 'track' in attr or 'analytics' in attr))):
             element.decompose()
             
         # Find the main content
@@ -225,7 +266,7 @@ def html_to_markdown(html_content):
         
         # Convert to markdown using html2text
         h = html2text.HTML2Text()
-        h.ignore_links = False
+        h.ignore_links = True  # Strip out links, keeping only the text
         h.ignore_images = False
         h.body_width = 0  # No wrapping
         markdown = h.handle(content_html)
@@ -299,7 +340,7 @@ def clean_markdown_content(markdown):
     
     return cleaned_markdown
 
-def get_content_summary(markdown, max_chars=200):
+def get_content_summary(markdown, max_chars=500):
     """Get a summary of markdown content.
     
     Args:
@@ -318,7 +359,7 @@ def get_content_summary(markdown, max_chars=200):
     # Extract the first few paragraphs
     paragraphs = [p for p in cleaned_markdown.split('\n\n') if p.strip()]
     
-    # Use the first one or two paragraphs depending on length
+    # Use the first few paragraphs depending on length
     summary = ""
     for p in paragraphs:
         if len(summary) + len(p) < max_chars * 1.5:  # Allow a bit more than max_chars to get complete paragraphs

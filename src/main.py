@@ -62,6 +62,13 @@ def format_story(story):
         output += f"\nSummary: {story['content_summary']}\n"
     elif is_twitter_url or content_fetched == 3:
         output += "\nSummary: [Twitter/X content not available - view directly on Twitter]\n"
+    elif story.get('error_type') == 'PaywallError':
+        output += "\nSummary: [Content unavailable: Behind paywall or subscription required]\n"
+    elif story.get('error_type') == 'ContentError':
+        output += "\nSummary: [Content unavailable: Website uses anti-scraping protection]\n"
+    elif story.get('error_type') == 'ProblematicDomain':
+        domain = urlparse(story.get('url', '')).netloc
+        output += f"\nSummary: [Content unavailable: {story.get('error_message', f'Unable to scrape {domain}')}]\n"
     elif story.get('error_type'):
         error_type = story.get('error_type')
         error_msg = story.get('error_message', '')

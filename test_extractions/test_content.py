@@ -66,7 +66,7 @@ def test_content_extraction(url):
     try:
         summary = get_content_summary(cleaned_markdown)
         print(f"Summary: {len(summary)} characters")
-        print(f"\nSummary preview: {summary[:200]}...")
+        print(f"\nSummary preview: {summary[:500]}...")
         
         # Save summary for inspection
         with open("test_summary.txt", "w") as f:
