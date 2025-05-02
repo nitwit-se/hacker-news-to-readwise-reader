@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'hn_stories.db')
 
@@ -24,9 +24,16 @@ def init_db():
             by TEXT NOT NULL,
             time INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
-            type TEXT NOT NULL
+            type TEXT NOT NULL,
+            last_updated TEXT NOT NULL
         )
         ''')
+    else:
+        # Check if last_updated column exists and add it if not
+        cursor.execute("PRAGMA table_info(stories)")
+        columns = [column[1] for column in cursor.fetchall()]
+        if 'last_updated' not in columns:
+            cursor.execute("ALTER TABLE stories ADD COLUMN last_updated TEXT NOT NULL DEFAULT ''")
     
     # Create metadata table for tracking last poll time
     cursor.execute('''
@@ -36,11 +43,16 @@ def init_db():
     )
     ''')
     
-    # Insert initial last_poll_time if it doesn't exist
+    # Insert initial metadata if they don't exist
     cursor.execute('''
     INSERT OR IGNORE INTO metadata (key, value)
     VALUES ('last_poll_time', ?)
     ''', (datetime.now().isoformat(),))
+    
+    cursor.execute('''
+    INSERT OR IGNORE INTO metadata (key, value)
+    VALUES ('last_oldest_id', '0')
+    ''')
     
     conn.commit()
     conn.close()
@@ -72,6 +84,33 @@ def update_last_poll_time():
     
     return current_time
 
+def get_last_oldest_id():
+    """Get the ID of the oldest story from the last run."""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT value FROM metadata WHERE key = "last_oldest_id"')
+    result = cursor.fetchone()
+    
+    conn.close()
+    
+    if result and result[0] != '0':
+        return int(result[0])
+    return None
+
+def update_last_oldest_id(oldest_id):
+    """Update the ID of the oldest story from the current run."""
+    if not oldest_id:
+        return
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('UPDATE metadata SET value = ? WHERE key = "last_oldest_id"', (str(oldest_id),))
+    
+    conn.commit()
+    conn.close()
+
 def save_stories(stories):
     """Save new stories to the database.
     
@@ -98,9 +137,9 @@ def save_stories(stories):
             
             cursor.execute('''
             INSERT INTO stories (
-                id, title, url, score, by, time, timestamp, type
+                id, title, url, score, by, time, timestamp, type, last_updated
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 story['id'],
                 story.get('title', ''),
@@ -109,7 +148,8 @@ def save_stories(stories):
                 story.get('by', ''),
                 story.get('time', 0),
                 current_time,
-                story.get('type', 'story')
+                story.get('type', 'story'),
+                current_time
             ))
             new_count += 1
     
@@ -117,6 +157,142 @@ def save_stories(stories):
     conn.close()
     
     return new_count
+
+def update_story_scores(stories):
+    """Update scores for existing stories.
+    
+    Args:
+        stories (list): List of story dictionaries to update
+        
+    Returns:
+        int: Number of stories updated
+    """
+    if not stories:
+        return 0
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    update_count = 0
+    current_time = datetime.now().isoformat()
+    
+    for story in stories:
+        # Check if story exists
+        cursor.execute('SELECT score FROM stories WHERE id = ?', (story['id'],))
+        result = cursor.fetchone()
+        
+        if result is not None:
+            # Only update if score has changed
+            if result[0] != story.get('score', 0):
+                cursor.execute('''
+                UPDATE stories
+                SET score = ?, last_updated = ?
+                WHERE id = ?
+                ''', (
+                    story.get('score', 0),
+                    current_time,
+                    story['id']
+                ))
+                update_count += 1
+    
+    conn.commit()
+    conn.close()
+    
+    return update_count
+
+def save_or_update_stories(stories):
+    """Save new stories and update existing ones.
+    
+    Args:
+        stories (list): List of story dictionaries to save or update
+        
+    Returns:
+        tuple: (new_count, update_count) - Number of new and updated stories
+    """
+    if not stories:
+        return 0, 0
+        
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    new_count = 0
+    update_count = 0
+    current_time = datetime.now().isoformat()
+    
+    for story in stories:
+        # Check if story already exists
+        cursor.execute('SELECT score FROM stories WHERE id = ?', (story['id'],))
+        result = cursor.fetchone()
+        
+        if result is None:
+            # New story - insert it
+            cursor.execute('''
+            INSERT INTO stories (
+                id, title, url, score, by, time, timestamp, type, last_updated
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                story['id'],
+                story.get('title', ''),
+                story.get('url', ''),
+                story.get('score', 0),
+                story.get('by', ''),
+                story.get('time', 0),
+                current_time,
+                story.get('type', 'story'),
+                current_time
+            ))
+            new_count += 1
+        else:
+            # Existing story - update score if changed
+            if result[0] != story.get('score', 0):
+                cursor.execute('''
+                UPDATE stories
+                SET score = ?, last_updated = ?
+                WHERE id = ?
+                ''', (
+                    story.get('score', 0),
+                    current_time,
+                    story['id']
+                ))
+                update_count += 1
+    
+    conn.commit()
+    conn.close()
+    
+    return new_count, update_count
+
+def get_stories_within_timeframe(hours=24, min_score=0):
+    """Get all stories within the specified timeframe with at least the minimum score.
+    
+    Args:
+        hours (int): Number of hours to look back
+        min_score (int): Minimum score threshold
+        
+    Returns:
+        list: List of story dictionaries
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Calculate cutoff time
+    cutoff_time = datetime.now() - timedelta(hours=hours)
+    cutoff_timestamp = int(cutoff_time.timestamp())
+    
+    # Get stories within timeframe with minimum score
+    cursor.execute('''
+    SELECT * FROM stories 
+    WHERE time >= ? AND score >= ?
+    ORDER BY score DESC
+    ''', (cutoff_timestamp, min_score))
+    
+    rows = cursor.fetchall()
+    stories = [dict(row) for row in rows]
+    
+    conn.close()
+    
+    return stories
 
 def get_story_ids_since(timestamp_str=None):
     """Get IDs of stories added since the specified timestamp.

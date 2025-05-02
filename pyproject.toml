@@ -7,6 +7,8 @@ dependencies = [
     "requests>=2.31.0",
     "beautifulsoup4>=4.12.2",
     "html2text>=2020.1.16",
+    "aiohttp>=3.9.1",
+    "asyncio>=3.4.3",
 ]
 
 [project.optional-dependencies]

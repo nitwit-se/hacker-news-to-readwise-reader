@@ -1,5 +1,8 @@
 import requests
 import time
+import asyncio
+import aiohttp
+from datetime import datetime, timedelta
 
 # Hacker News API base URL
 API_BASE_URL = 'https://hacker-news.firebaseio.com/v0/'
@@ -75,3 +78,162 @@ def get_stories_details(story_ids, delay=0.05):
         time.sleep(delay)
     
     return stories
+
+def get_stories_batch(start_index=0, batch_size=100):
+    """Get a batch of newest stories from the specified starting index.
+    
+    Args:
+        start_index (int): Starting index for the batch
+        batch_size (int): Number of stories to fetch in this batch
+        
+    Returns:
+        list: List of story IDs in this batch
+    """
+    all_new_story_ids = get_new_stories(500)  # Get a large enough list to handle batching
+    
+    # Handle out-of-range indices
+    if start_index >= len(all_new_story_ids):
+        return []
+    
+    end_index = min(start_index + batch_size, len(all_new_story_ids))
+    return all_new_story_ids[start_index:end_index]
+
+def is_story_within_timeframe(story, hours=24):
+    """Check if a story is within the specified timeframe.
+    
+    Args:
+        story (dict): Story details dictionary
+        hours (int): Number of hours to look back
+        
+    Returns:
+        bool: True if the story is within timeframe, False otherwise
+    """
+    if not story or 'time' not in story:
+        return False
+        
+    story_time = datetime.fromtimestamp(story['time'])
+    cutoff_time = datetime.now() - timedelta(hours=hours)
+    
+    return story_time >= cutoff_time
+
+async def get_story_async(session, story_id):
+    """Get details for a specific story by ID asynchronously.
+    
+    Args:
+        session (aiohttp.ClientSession): Async HTTP session
+        story_id (int): The story ID to fetch
+        
+    Returns:
+        dict: Story details or None if not found
+    """
+    url = f"{API_BASE_URL}item/{story_id}.json"
+    
+    try:
+        async with session.get(url) as response:
+            if response.status == 404:
+                return None
+            
+            response.raise_for_status()
+            return await response.json()
+    except Exception:
+        return None
+
+async def get_stories_details_async(story_ids, concurrency=5):
+    """Get details for multiple stories asynchronously.
+    
+    Args:
+        story_ids (list): List of story IDs to fetch
+        concurrency (int): Maximum number of concurrent requests
+        
+    Returns:
+        list: List of story detail dictionaries
+    """
+    stories = []
+    semaphore = asyncio.Semaphore(concurrency)
+    
+    async with aiohttp.ClientSession() as session:
+        async def fetch_with_semaphore(story_id):
+            async with semaphore:
+                story = await get_story_async(session, story_id)
+                if story and story.get('type') == 'story':
+                    return story
+                return None
+        
+        tasks = [fetch_with_semaphore(story_id) for story_id in story_ids]
+        results = await asyncio.gather(*tasks)
+        
+        # Filter out None values
+        stories = [story for story in results if story]
+    
+    return stories
+
+def get_stories_until_cutoff(last_oldest_id=None, hours=24, batch_size=100, max_batches=10):
+    """Get all new stories until reaching the 24-hour cutoff or last known ID.
+    
+    This function fetches stories in batches until it either:
+    1. Finds a story older than the cutoff time
+    2. Reaches the last_oldest_id from a previous run
+    3. Processes the maximum number of allowed batches
+    
+    Args:
+        last_oldest_id (int): The ID of the oldest story from the previous run
+        hours (int): Number of hours to look back
+        batch_size (int): Size of each batch of stories to process
+        max_batches (int): Maximum number of batches to process
+        
+    Returns:
+        tuple: (all_stories, oldest_id) - List of stories within timeframe and oldest ID processed
+    """
+    all_stories = []
+    oldest_id = None
+    reached_cutoff = False
+    
+    # Get all new story IDs
+    all_new_story_ids = get_new_stories(500)
+    
+    # Process stories in batches
+    for batch_num in range(max_batches):
+        start_idx = batch_num * batch_size
+        if start_idx >= len(all_new_story_ids):
+            break
+            
+        end_idx = min(start_idx + batch_size, len(all_new_story_ids))
+        batch_ids = all_new_story_ids[start_idx:end_idx]
+        
+        # If we have no more IDs to process, we're done
+        if not batch_ids:
+            break
+            
+        # If we reached the last_oldest_id from previous run, we can stop
+        if last_oldest_id and last_oldest_id in batch_ids:
+            oldest_id = last_oldest_id
+            idx = batch_ids.index(last_oldest_id)
+            # Only process stories newer than the last_oldest_id
+            batch_ids = batch_ids[:idx]
+            if not batch_ids:
+                break
+        
+        # Get details for this batch
+        batch_stories = get_stories_details(batch_ids)
+        
+        # Process each story
+        for story in batch_stories:
+            if not story:
+                continue
+                
+            # Set the oldest ID we've seen (for the next run)
+            if oldest_id is None or story['id'] < oldest_id:
+                oldest_id = story['id']
+                
+            # Check if this story is within our timeframe
+            if is_story_within_timeframe(story, hours):
+                all_stories.append(story)
+            else:
+                # We've reached a story outside our timeframe
+                reached_cutoff = True
+        
+        # If we've reached the cutoff, we can stop processing more batches
+        if reached_cutoff:
+            break
+    
+    return all_stories, oldest_id

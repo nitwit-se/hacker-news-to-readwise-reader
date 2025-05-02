@@ -1,13 +1,15 @@
 # Hacker News Poller
 
-A Python application that polls Hacker News for new stories since the last poll and displays them in the console. Story data is stored in a SQLite database for tracking purposes.
+A Python application that polls Hacker News for stories from the past 24 hours with a score of 10 or higher, displaying them in the console. Story data is stored in a SQLite database for tracking and filtering purposes.
 
 ## Features
 
-- Fetches new stories from Hacker News API
-- Stores story data in a local SQLite database
-- Tracks when the application was last run
-- Displays new stories in the console
+- Efficiently retrieves stories from Hacker News API using batching
+- Tracks and updates story scores over time
+- Filters stories by age (last 24 hours) and quality (score ≥ 10)
+- Uses asynchronous requests for better performance
+- Stores and updates story data in a local SQLite database
+- Intelligently tracks last processed stories to minimize redundant fetching
 
 ## Requirements
 
@@ -15,6 +17,8 @@ A Python application that polls Hacker News for new stories since the last poll 
 - `uv` Python package manager
 - Dependencies (automatically installed):
   - requests: HTTP library for API calls
+  - aiohttp: Asynchronous HTTP client
+  - asyncio: Asynchronous I/O library
 
 ## Installation
 
@@ -48,7 +52,7 @@ A Python application that polls Hacker News for new stories since the last poll 
 
 ## Usage
 
-To poll for new stories:
+To poll for stories from the past 24 hours with scores ≥ 10:
 
 ```
 # Activate the environment if not already activated
@@ -67,21 +71,44 @@ python src/main.py
 
 Options:
 
-- `--limit N`: Specify maximum number of stories to retrieve (default: 30)
+- `--hours N`: Specify how many hours back to look for stories (default: 24)
+- `--min-score N`: Specify minimum score threshold for displaying stories (default: 10)
+- `--batch-size N`: Specify how many stories to process in each batch (default: 100)
+- `--max-batches N`: Specify maximum number of batches to process (default: 10)
 
 ## How It Works
 
-1. The program checks when it was last run (stored in the SQLite database)
-2. It fetches new stories from the Hacker News API
-3. New stories are stored in the database
-4. Stories that are new since the last poll are displayed in the console
-5. The application tracks which stories are new by comparing with the database
+1. The program fetches new stories in batches until it either:
+   - Reaches a story older than the 24-hour cutoff
+   - Encounters the last oldest ID from a previous run
+   - Processes the maximum number of allowed batches
+
+2. For each story, it:
+   - Adds new stories to the database
+   - Updates scores for existing stories in the database
+   - Tracks the oldest story ID for optimization in future runs
+
+3. After processing all stories, it queries the database for:
+   - Stories from the past 24 hours (configurable)
+   - With scores greater than or equal to 10 (configurable)
+
+4. These high-quality stories are displayed in the console, sorted by score
 
 ## Database
 
 The application uses SQLite3 to store:
 
-- Story details (ID, title, URL, score, author, timestamp)
-- Metadata such as the last time the program was run
+- Story details (ID, title, URL, score, author, timestamp, last updated time)
+- Metadata such as:
+  - Last poll time
+  - Last oldest ID processed (for optimization)
 
 The database file (`hn_stories.db`) is created in the same directory as the script.
+
+## Performance Considerations
+
+- The application uses async/await for concurrent API requests
+- It implements a throttling mechanism to avoid API rate limits
+- Batch processing allows efficient handling of large datasets
+- Tracking the oldest ID processed minimizes redundant processing
+- The application is designed to be run periodically (e.g., hourly)

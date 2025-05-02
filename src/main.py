@@ -3,14 +3,16 @@
 import sys
 import os
 import argparse
+import asyncio
 from datetime import datetime
 
 # Add the parent directory to the path so we can import our modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.db import init_db, get_last_poll_time, update_last_poll_time, save_stories, get_story_ids_since
-from src.db import get_story_with_content
-from src.api import get_new_stories, get_stories_details
+from src.db import init_db, get_last_poll_time, update_last_poll_time
+from src.db import get_last_oldest_id, update_last_oldest_id
+from src.db import save_or_update_stories, get_stories_within_timeframe
+from src.api import get_stories_until_cutoff, get_stories_details_async
 
 def format_story(story):
     """Format a story for console output.
@@ -43,68 +45,91 @@ def format_story(story):
     
     return output
 
-def poll_hacker_news(limit=30):
-    """Poll Hacker News for new stories.
+async def poll_hacker_news_async(hours=24, min_score=10, batch_size=100, max_batches=10):
+    """Poll Hacker News for stories from the past 24 hours with score >= min_score.
     
     Args:
-        limit (int): Maximum number of stories to retrieve
+        hours (int): Number of hours to look back
+        min_score (int): Minimum score threshold for displaying stories
+        batch_size (int): Size of each batch of stories to process
+        max_batches (int): Maximum number of batches to process
         
     Returns:
-        list: List of new stories
+        list: List of stories meeting the criteria
     """
     # Initialize database if not exists
     init_db()
     
-    # Get the timestamp of the last poll
+    # Get the timestamp of the last poll and the last oldest ID
     last_poll_time = get_last_poll_time()
-    print(f"Last poll time: {last_poll_time}\n")
+    last_oldest_id = get_last_oldest_id()
     
-    # Get new story IDs from the API
-    new_story_ids = get_new_stories(limit=limit)
-    print(f"Fetched {len(new_story_ids)} story IDs from Hacker News API\n")
+    print(f"Last poll time: {last_poll_time}")
+    print(f"Last oldest story ID: {last_oldest_id or 'None'}\n")
     
-    # Get details for each story
-    stories = get_stories_details(new_story_ids)
-    print(f"Retrieved details for {len(stories)} stories\n")
+    # Get new stories and oldest ID processed in this run
+    print(f"Fetching stories from the past {hours} hours...")
+    stories, oldest_id = get_stories_until_cutoff(
+        last_oldest_id=last_oldest_id,
+        hours=hours,
+        batch_size=batch_size,
+        max_batches=max_batches
+    )
     
-    # Save stories to the database
-    new_count = save_stories(stories)
+    print(f"Found {len(stories)} stories within the {hours}-hour timeframe\n")
     
-    # Get IDs of stories added since the last poll (before updating last_poll_time)
-    new_story_ids = get_story_ids_since(last_poll_time)
+    # Update the last oldest ID for the next run
+    if oldest_id:
+        update_last_oldest_id(oldest_id)
+        print(f"Updated last oldest story ID to: {oldest_id}\n")
+    
+    # Save new stories and update existing ones
+    new_count, update_count = save_or_update_stories(stories)
+    print(f"Added {new_count} new stories and updated {update_count} existing stories\n")
     
     # Update the last poll time
     update_last_poll_time()
     
-    # Get full story details for each new story
-    new_stories = []
-    for story_id in new_story_ids:
-        # Try to get the full story from database
-        full_story = get_story_with_content(story_id)
-        if full_story:
-            new_stories.append(full_story)
+    # Get all stories from the past 24 hours with score >= min_score
+    high_score_stories = get_stories_within_timeframe(hours=hours, min_score=min_score)
+    print(f"Found {len(high_score_stories)} stories with score >= {min_score} from the past {hours} hours\n")
     
-    return new_stories
+    return high_score_stories
 
 def main():
     """Main entry point for the program."""
-    parser = argparse.ArgumentParser(description='Poll Hacker News for new stories')
-    parser.add_argument('--limit', type=int, default=30,
-                        help='Maximum number of stories to retrieve')
+    parser = argparse.ArgumentParser(description='Poll Hacker News for recent high-quality stories')
+    parser.add_argument('--hours', type=int, default=24,
+                        help='Number of hours to look back')
+    parser.add_argument('--min-score', type=int, default=10,
+                        help='Minimum score threshold for displaying stories')
+    parser.add_argument('--batch-size', type=int, default=100,
+                        help='Size of each batch of stories to process')
+    parser.add_argument('--max-batches', type=int, default=10,
+                        help='Maximum number of batches to process')
     args = parser.parse_args()
     
-    print(f"Polling Hacker News for new stories (limit: {args.limit})...\n")
+    print(f"Polling Hacker News for stories from the past {args.hours} hours with score >= {args.min_score}...\n")
     
     try:
-        new_stories = poll_hacker_news(limit=args.limit)
+        # Run the async function in the event loop
+        high_score_stories = asyncio.run(poll_hacker_news_async(
+            hours=args.hours,
+            min_score=args.min_score,
+            batch_size=args.batch_size,
+            max_batches=args.max_batches
+        ))
         
-        if new_stories:
-            print(f"Found {len(new_stories)} new stories since last poll:")
-            for story in sorted(new_stories, key=lambda x: x.get('score', 0), reverse=True):
+        if high_score_stories:
+            print(f"Top stories from the past {args.hours} hours (score >= {args.min_score}):")
+            for story in high_score_stories:
                 print(format_story(story))
         else:
-            print("No new stories found since last poll.")
+            print(f"No stories with score >= {args.min_score} found from the past {args.hours} hours.")
     
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user.")
+        return 1
     except Exception as e:
         print(f"Error: {e}")
         return 1
