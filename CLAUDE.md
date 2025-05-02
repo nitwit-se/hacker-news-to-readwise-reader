@@ -86,7 +86,13 @@ python src/main.py
    - Interest categories include technology, programming, security, DIY projects, and more
    - Only stories matching user interests are kept in the final output
 
-6. **Console Output**: High-quality stories are formatted and displayed to the console, sorted by score.
+6. **Smart Scoring and Sorting**: The application uses a weighted scoring system:
+   - Combines HN score and relevance score using a configurable weighted formula
+   - Normalizes HN scores using a logarithmic scale to reduce the impact of extremely high scores
+   - Allows adjustment of weighting between HN score and relevance score via `--hn-weight`
+   - Scores are combined on a scale of 0-100 for consistent comparison
+
+7. **Console Output**: High-quality stories are formatted and displayed to the console, sorted by combined score.
 
 ## Development Notes
 

@@ -5,6 +5,7 @@ import os
 import argparse
 import asyncio
 import time
+import math
 from datetime import datetime
 
 # Add the parent directory to the path so we can import our modules
@@ -18,6 +19,35 @@ from src.api import get_stories_until_cutoff, get_stories_details_async, get_sto
 from src.api import get_filtered_stories_async
 from src.classifier import is_interesting, get_relevance_score
 from src.classifier import process_story_batch_async, get_relevance_score_async
+
+def calculate_combined_score(story, hn_weight=0.7):
+    """Calculate a combined score using both HN score and relevance score.
+    
+    Uses logarithmic scaling for HN score to reduce the impact of extremely high scores,
+    then combines it with the relevance score using a weighted average.
+    
+    Args:
+        story (dict): Story details including 'score' and optionally 'relevance_score'
+        hn_weight (float): Weight to apply to the normalized HN score (0.0-1.0)
+        
+    Returns:
+        float: Combined score between 0-100
+    """
+    # Extract scores from story
+    hn_score = story.get('score', 0)
+    relevance_score = story.get('relevance_score', 0)
+    
+    # If no relevance score, fall back to just using HN score
+    if relevance_score is None:
+        relevance_score = 0
+    
+    # Normalize the HN score using logarithmic scale (log10(1000) ≈ 3, log10(10000) ≈ 4)
+    # Scale to approximately 0-100 range
+    normalized_hn = math.log10(max(1, hn_score)) * 25
+    
+    # Combine with weighted average
+    relevance_weight = 1 - hn_weight
+    return (hn_weight * normalized_hn) + (relevance_weight * relevance_score)
 
 def format_story(story):
     """Format a story for console output.
@@ -41,12 +71,14 @@ def format_story(story):
     # Create the output string
     output = f"\n{title}\n"
     
-    # Include relevance score if available
-    relevance_info = ""
+    # Include scores information
+    score_info = f"HN Score: {score}"
     if 'relevance_score' in story and story['relevance_score'] is not None:
-        relevance_info = f" | Relevance: {story['relevance_score']}"
+        score_info += f" | Relevance: {story['relevance_score']}"
+    if 'combined_score' in story:
+        score_info += f" | Combined: {story['combined_score']:.1f}"
     
-    output += f"ID: {story_id} | Score: {score}{relevance_info} | By: {author} | Posted: {time_str}\n"
+    output += f"ID: {story_id} | {score_info} | By: {author} | Posted: {time_str}\n"
     
     if url:
         output += f"URL: {url}\n"
@@ -150,13 +182,14 @@ async def score_stories_async(hours=24, min_score=30, batch_size=10):
     print(f"\nCalculated relevance scores for {scored_count} stories and updated database.")
     return scored_count
 
-def show_stories(hours=24, min_hn_score=30, min_relevance=75):
+def show_stories(hours=24, min_hn_score=30, min_relevance=75, hn_weight=0.7):
     """Display stories meeting criteria from the database.
     
     Args:
         hours (int): Number of hours to look back
         min_hn_score (int): Minimum HN score threshold
         min_relevance (int): Minimum relevance score threshold
+        hn_weight (float): Weight to apply to HN score in combined scoring (0.0-1.0)
         
     Returns:
         int: Number of stories displayed
@@ -189,10 +222,15 @@ def show_stories(hours=24, min_hn_score=30, min_relevance=75):
     
     # Display stories
     if relevant_stories:
-        # Sort by relevance score, then by HN score
-        relevant_stories.sort(key=lambda s: (s['relevance_score'], s['score']), reverse=True)
+        # Calculate combined scores for all stories
+        for story in relevant_stories:
+            story['combined_score'] = calculate_combined_score(story, hn_weight)
+        
+        # Sort by combined score
+        relevant_stories.sort(key=lambda s: s['combined_score'], reverse=True)
         
         print(f"Top stories from the past {hours} hours (HN score >= {min_hn_score}, relevance >= {min_relevance}):")
+        print(f"Sorted using combined score (HN weight: {hn_weight:.1f}, Relevance weight: {1-hn_weight:.1f})")
         for story in relevant_stories:
             print(format_story(story))
     else:
@@ -228,7 +266,8 @@ def cmd_show(args):
     show_stories(
         hours=args.hours,
         min_hn_score=args.min_score,
-        min_relevance=args.min_relevance
+        min_relevance=args.min_relevance,
+        hn_weight=args.hn_weight
     )
     return 0
 
@@ -271,6 +310,8 @@ def main():
                                     help='Display stories meeting criteria')
     show_parser.add_argument('--min-relevance', type=int, default=75,
                          help='Minimum relevance score threshold (default: 75)')
+    show_parser.add_argument('--hn-weight', type=float, default=0.7,
+                         help='Weight to apply to HN score (0.0-1.0, default: 0.7)')
     show_parser.set_defaults(func=cmd_show)
     
     # Parse arguments

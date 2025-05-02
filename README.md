@@ -13,6 +13,7 @@ A high-performance Python application that polls Hacker News for high-quality st
 - Stores and updates story data in a local SQLite database
 - Intelligently tracks processed stories to minimize redundant fetching
 - Claude AI-powered personalized filtering based on your interests
+- Smart scoring system that combines HN score and relevance score with configurable weights
 
 ## Requirements
 
@@ -131,6 +132,7 @@ Show Options:
 - `--hours N`: Specify how many hours back to look for stories (default: 24)
 - `--min-score N`: Minimum HN score threshold (default: 30)
 - `--min-relevance N`: Minimum relevance score threshold (default: 75)
+- `--hn-weight N`: Weight to apply to HN score in combined scoring (0.0-1.0, default: 0.7)
 
 ## How It Works
 
@@ -159,8 +161,11 @@ The `score` command:
 The `show` command:
 - Queries the database for stories meeting criteria
 - Filters by both HN score and relevance score
-- Sorts results by relevance and HN score
-- Displays formatted output in the console
+- Calculates a combined score based on both HN score and relevance score
+- Normalizes HN scores with logarithmic scaling to reduce the impact of extremely high scores
+- Allows adjusting weight between HN score and relevance score with `--hn-weight`
+- Sorts results by combined score for optimal story ranking
+- Displays formatted output in the console with all scores
 
 ## Database
 
@@ -257,6 +262,11 @@ A typical workflow might look like this:
    ```bash
    # Show stories with custom thresholds
    hn-poll show --min-score 20 --min-relevance 60
+   
+   # Adjust the weighting between HN score and relevance score
+   hn-poll show --hn-weight 0.5  # Equal weighting between HN and relevance
+   hn-poll show --hn-weight 0.3  # Favor relevance score more heavily
+   hn-poll show --hn-weight 0.9  # Favor HN score more heavily
    ```
 
 This separation of concerns allows for more efficient API usage and clearer operation.
