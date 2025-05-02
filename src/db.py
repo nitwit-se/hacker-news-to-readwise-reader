@@ -276,8 +276,8 @@ def get_stories_within_timeframe(hours=24, min_score=0):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # Calculate cutoff time
-    cutoff_time = datetime.now() - timedelta(hours=hours)
+    # Calculate cutoff time in UTC for consistent timezone handling
+    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
     cutoff_timestamp = int(cutoff_time.timestamp())
     
     # Get stories within timeframe with minimum score

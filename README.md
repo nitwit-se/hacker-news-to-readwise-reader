@@ -1,15 +1,17 @@
 # Hacker News Poller
 
-A Python application that polls Hacker News for stories from the past 24 hours with a score of 10 or higher, displaying them in the console. Story data is stored in a SQLite database for tracking and filtering purposes.
+A high-performance Python application that polls Hacker News for high-quality stories, displaying them in the console. The application can fetch from top, best, or new story feeds and filter by time and score. Story data is stored in a SQLite database for tracking and filtering purposes.
 
 ## Features
 
-- Efficiently retrieves stories from Hacker News API using batching
+- Efficiently retrieves high-quality stories directly from Hacker News API
+- Choose between top, best, or new story feeds
+- Processes up to 500 stories in a single request with asynchronous processing
 - Tracks and updates story scores over time
-- Filters stories by age (last 24 hours) and quality (score ≥ 10)
-- Uses asynchronous requests for better performance
+- Filters stories by age (default 24 hours) and quality (default score ≥ 10)
+- Uses asynchronous requests with high concurrency for optimal performance
 - Stores and updates story data in a local SQLite database
-- Intelligently tracks last processed stories to minimize redundant fetching
+- Intelligently tracks processed stories to minimize redundant fetching
 
 ## Requirements
 
@@ -73,26 +75,30 @@ Options:
 
 - `--hours N`: Specify how many hours back to look for stories (default: 24)
 - `--min-score N`: Specify minimum score threshold for displaying stories (default: 10)
-- `--batch-size N`: Specify how many stories to process in each batch (default: 100)
-- `--max-batches N`: Specify maximum number of batches to process (default: 10)
+- `--source [top|best|new]`: Select which Hacker News feed to use (default: top)
+- `--limit N`: Maximum number of stories to fetch from source (default: 500)
 
 ## How It Works
 
-1. The program fetches new stories in batches until it either:
-   - Reaches a story older than the 24-hour cutoff
-   - Encounters the last oldest ID from a previous run
-   - Processes the maximum number of allowed batches
+1. The program fetches stories from the selected source (top, best, or new):
+   - Gets up to 500 pre-curated story IDs in a single API call
+   - Efficiently processes these stories asynchronously with high concurrency
+   - Applies time and score filters directly during processing
 
 2. For each story, it:
+   - Filters by timeframe (default: 24 hours) and score (default: ≥ 10)
    - Adds new stories to the database
-   - Updates scores for existing stories in the database
-   - Tracks the oldest story ID for optimization in future runs
+   - Updates scores for existing stories
+   - Tracks the oldest ID for optimization
 
-3. After processing all stories, it queries the database for:
-   - Stories from the past 24 hours (configurable)
-   - With scores greater than or equal to 10 (configurable)
+3. The filtered, high-quality stories are:
+   - Sorted by score in descending order
+   - Displayed directly in the console
+   - Stored in the database for future reference
 
-4. These high-quality stories are displayed in the console, sorted by score
+4. The program tracks metadata to optimize future runs:
+   - Last poll time
+   - Oldest story ID processed
 
 ## Database
 
@@ -107,8 +113,11 @@ The database file (`hn_stories.db`) is created in the same directory as the scri
 
 ## Performance Considerations
 
-- The application uses async/await for concurrent API requests
-- It implements a throttling mechanism to avoid API rate limits
-- Batch processing allows efficient handling of large datasets
+- Direct fetching of pre-filtered story lists (top/best) for optimal performance
+- High-concurrency asynchronous processing for simultaneous story retrieval
+- Single pass processing eliminates the need for batch processing
+- Rate limiting and error handling for API reliability
 - Tracking the oldest ID processed minimizes redundant processing
-- The application is designed to be run periodically (e.g., hourly)
+- Early filtering reduces database operations and memory usage
+- Optimized for fast execution even with large numbers of stories
+- The application is designed to be run periodically (e.g., hourly or daily)

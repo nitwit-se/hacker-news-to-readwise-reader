@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This project is a Python application that polls the Hacker News API for stories from the past 24 hours with a score of 10 or higher, displaying them in the console. The application stores and updates story data in a SQLite database for tracking and filtering purposes.
+This project is a high-performance Python application that polls the Hacker News API for high-quality stories, displaying them in the console. The application can fetch from top, best, or new story feeds, applying time and score filters. All story data is stored in a SQLite database for tracking and filtering purposes.
 
 ## Technologies Used
 
@@ -47,7 +47,10 @@ source .venv/bin/activate.fish
 hn-poll
 
 # Run with custom settings
-hn-poll --hours 48 --min-score 5
+hn-poll --hours 48 --min-score 5 --source best
+
+# Available sources: top, best, new
+hn-poll --source best
 
 # Or run directly
 python src/main.py
@@ -57,19 +60,20 @@ python src/main.py
 
 1. **Database Initialization**: When first run, the application creates a SQLite database with tables for stories and metadata. See [Database Schema](docs/db_schema.md) for details.
 
-2. **Efficient API Integration**: The application uses the Hacker News Firebase API to fetch stories in batches, stopping when it either:
-   - Reaches a story older than the specified timeframe (default: 24 hours)
-   - Encounters the oldest ID from a previous run
-   - Processes the maximum number of allowed batches
+2. **Optimized API Integration**: The application uses the Hacker News Firebase API endpoints to efficiently fetch high-quality stories:
+   - Directly fetches up to 500 pre-filtered stories from top, best, or new feeds
+   - Processes stories asynchronously with high concurrency for optimal performance
+   - Applies time and score filters during processing to minimize database operations
 
 3. **Story Management**: 
    - New stories are added to the database
    - Existing stories have their scores updated
    - The application tracks the oldest story ID processed to optimize future runs
 
-4. **Quality Filtering**: After processing all stories, the application queries the database for:
-   - Stories from the past 24 hours (configurable)
-   - With scores greater than or equal to 10 (configurable)
+4. **Real-time Filtering**: The application filters stories by:
+   - Time (default: stories from the past 24 hours)
+   - Quality (default: stories with scores ≥ 10)
+   - Source selection (top, best, or new stories)
 
 5. **Console Output**: High-quality stories are formatted and displayed to the console, sorted by score.
 
@@ -100,11 +104,14 @@ NEVER use pip directly in this project as it would bypass uv's dependency resolu
 
 ## Performance Considerations
 
-- The application uses async/await for concurrent API requests
-- It implements a throttling mechanism to avoid API rate limits
-- Batch processing allows efficient handling of large datasets
-- Tracking the oldest ID processed minimizes redundant processing 
-- The application is designed to be run periodically (e.g., hourly)
+- Direct fetching of pre-filtered story lists (top/best) for optimal performance
+- High-concurrency asynchronous processing for simultaneous story retrieval
+- Single pass processing eliminates the need for batch processing
+- Rate limiting and error handling for API reliability
+- Tracking the oldest ID processed minimizes redundant processing
+- Early filtering reduces database operations and memory usage
+- Optimized for fast execution even with large numbers of stories
+- The application is designed to be run periodically (e.g., hourly or daily)
 
 ## Future Enhancements
 

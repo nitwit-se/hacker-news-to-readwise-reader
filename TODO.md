@@ -41,6 +41,7 @@
 ## Optional Enhancements (Future Work)
 - [x] Add story filtering options (by score, timeframe)
 - [x] Implement command-line arguments
+- [x] Optimize performance with direct source selection (top/best/new)
 - [ ] Create simple web dashboard
 - [ ] Add export functionality
 - [ ] Add colorful console output

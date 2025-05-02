@@ -7,7 +7,23 @@ from datetime import datetime, timedelta
 # Hacker News API base URL
 API_BASE_URL = 'https://hacker-news.firebaseio.com/v0/'
 
-def get_top_stories(limit=100):
+def get_best_stories(limit=500):
+    """Get IDs of best stories.
+    
+    Args:
+        limit (int): Maximum number of stories to fetch
+        
+    Returns:
+        list: List of story IDs
+    """
+    url = f"{API_BASE_URL}beststories.json"
+    response = requests.get(url)
+    response.raise_for_status()
+    
+    # Return only the requested number of stories
+    return response.json()[:limit]
+
+def get_top_stories(limit=500):
     """Get IDs of current top stories.
     
     Args:
@@ -23,7 +39,7 @@ def get_top_stories(limit=100):
     # Return only the requested number of stories
     return response.json()[:limit]
 
-def get_new_stories(limit=100):
+def get_new_stories(limit=500):
     """Get IDs of newest stories.
     
     Args:
@@ -110,9 +126,13 @@ def is_story_within_timeframe(story, hours=24):
     """
     if not story or 'time' not in story:
         return False
-        
-    story_time = datetime.fromtimestamp(story['time'])
-    cutoff_time = datetime.now() - timedelta(hours=hours)
+    
+    # The story['time'] is a Unix timestamp in seconds (UTC)
+    # Convert it to UTC datetime for consistent timezone handling
+    story_time = datetime.utcfromtimestamp(story['time'])
+    
+    # Use UTC for the cutoff time as well
+    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
     
     return story_time >= cutoff_time
 
@@ -138,7 +158,7 @@ async def get_story_async(session, story_id):
     except Exception:
         return None
 
-async def get_stories_details_async(story_ids, concurrency=5):
+async def get_stories_details_async(story_ids, concurrency=10):
     """Get details for multiple stories asynchronously.
     
     Args:
@@ -166,6 +186,85 @@ async def get_stories_details_async(story_ids, concurrency=5):
         stories = [story for story in results if story]
     
     return stories
+
+def get_max_item_id():
+    """Get the current maximum item ID from Hacker News.
+    
+    Returns:
+        int: The maximum item ID
+    """
+    url = f"{API_BASE_URL}maxitem.json"
+    response = requests.get(url)
+    response.raise_for_status()
+    return response.json()
+
+def get_stories_from_maxitem(hours=24, batch_size=100, max_batches=10, consecutive_old_threshold=5):
+    """Get all recent stories by working backwards from the maximum item ID.
+    
+    This function fetches stories in batches, starting from the most recent item
+    and working backwards. It continues until it finds a certain number of consecutive
+    items older than the specified timeframe.
+    
+    Args:
+        hours (int): Number of hours to look back
+        batch_size (int): Size of each batch of stories to process
+        max_batches (int): Maximum number of batches to process
+        consecutive_old_threshold (int): Number of consecutive old items to find before stopping
+        
+    Returns:
+        tuple: (all_stories, oldest_id) - List of stories within timeframe and oldest ID processed
+    """
+    all_stories = []
+    oldest_id = None
+    consecutive_old_count = 0
+    
+    # Get the current maximum item ID
+    max_item_id = get_max_item_id()
+    current_id = max_item_id
+    
+    # Process stories in batches
+    for batch_num in range(max_batches):
+        # Generate a batch of IDs going backwards from current_id
+        batch_ids = list(range(current_id, current_id - batch_size, -1))
+        current_id -= batch_size
+        
+        # If we have no more IDs to process or reached ID 1, we're done
+        if not batch_ids or batch_ids[-1] <= 1:
+            break
+        
+        # Get details for this batch
+        batch_stories = get_stories_details(batch_ids)
+        
+        # Track if we found any stories within timeframe in this batch
+        found_recent = False
+        
+        # Process each story
+        for story in batch_stories:
+            if not story:
+                continue
+                
+            # Set the oldest ID we've seen (for tracking)
+            if oldest_id is None or story['id'] < oldest_id:
+                oldest_id = story['id']
+                
+            # Check if this story is within our timeframe
+            if is_story_within_timeframe(story, hours):
+                all_stories.append(story)
+                consecutive_old_count = 0  # Reset consecutive old count
+                found_recent = True
+            else:
+                # We've found a story outside our timeframe
+                consecutive_old_count += 1
+        
+        # If we haven't found any recent stories in this batch, increment the counter
+        if not found_recent:
+            consecutive_old_count += 1
+        
+        # If we've found enough consecutive old items, we can stop
+        if consecutive_old_count >= consecutive_old_threshold:
+            break
+    
+    return all_stories, oldest_id
 
 def get_stories_until_cutoff(last_oldest_id=None, hours=24, batch_size=100, max_batches=10):
     """Get all new stories until reaching the 24-hour cutoff or last known ID.
@@ -237,3 +336,50 @@ def get_stories_until_cutoff(last_oldest_id=None, hours=24, batch_size=100, max_
             break
     
     return all_stories, oldest_id
+
+
+async def get_filtered_stories_async(source='top', hours=24, min_score=10, limit=500):
+    """Get high-quality stories efficiently using the specified source.
+    
+    This optimized function:
+    1. Fetches IDs for top, best, or new stories in bulk
+    2. Gets story details asynchronously with higher concurrency
+    3. Filters by time and score
+    
+    Args:
+        source (str): Where to get stories from - 'top', 'best', or 'new'
+        hours (int): Number of hours to look back
+        min_score (int): Minimum score for a story to be included
+        limit (int): Maximum number of stories to process
+        
+    Returns:
+        tuple: (stories, oldest_id) - List of filtered stories and oldest ID processed
+    """
+    # Get story IDs from the selected source
+    if source == 'top':
+        story_ids = get_top_stories(limit)
+    elif source == 'best':
+        story_ids = get_best_stories(limit)
+    else:  # default to 'new'
+        story_ids = get_new_stories(limit)
+    
+    # Get story details asynchronously
+    all_stories = await get_stories_details_async(story_ids)
+    
+    # Filter by time and score
+    filtered_stories = []
+    oldest_id = None
+    
+    for story in all_stories:
+        # Track oldest ID for future reference
+        if oldest_id is None or story['id'] < oldest_id:
+            oldest_id = story['id']
+            
+        # Filter by time and score
+        if is_story_within_timeframe(story, hours) and story.get('score', 0) >= min_score:
+            filtered_stories.append(story)
+    
+    # Sort by score (highest first)
+    filtered_stories.sort(key=lambda x: x.get('score', 0), reverse=True)
+    
+    return filtered_stories, oldest_id
