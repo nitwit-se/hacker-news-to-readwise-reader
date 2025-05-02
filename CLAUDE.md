@@ -6,7 +6,7 @@ This project is a Python application that polls the Hacker News API for new stor
 
 ## Technologies Used
 
-- **Python 3.8+**: Core programming language
+- **Python 3.12**: Core programming language
 - **uv**: Modern Python package manager for dependency management
 - **requests**: For making HTTP requests to the Hacker News API
 - **sqlite3**: Python's built-in SQLite database interface

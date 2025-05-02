@@ -2,7 +2,7 @@
 name = "hackernews-poller"
 version = "0.1.0"
 description = "A tool for polling Hacker News for new stories"
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
     "requests>=2.31.0",
 ]

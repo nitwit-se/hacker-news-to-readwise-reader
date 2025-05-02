@@ -11,7 +11,7 @@ A Python application that polls Hacker News for new stories since the last poll 
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.12+
 - `uv` Python package manager
 
 ## Installation
