@@ -9,6 +9,7 @@ dependencies = [
     "html2text>=2020.1.16",
     "aiohttp>=3.9.1",
     "asyncio>=3.4.3",
+    "anthropic>=0.19.1",
 ]
 
 [project.optional-dependencies]

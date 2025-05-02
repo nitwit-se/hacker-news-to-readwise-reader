@@ -13,6 +13,7 @@ This project is a high-performance Python application that polls the Hacker News
 - **argparse**: For command-line argument parsing
 - **aiohttp**: For asynchronous HTTP requests
 - **asyncio**: For asynchronous programming
+- **anthropic**: Python client for the Anthropic Claude API
 
 ## Project Structure
 
@@ -20,6 +21,7 @@ This project is a high-performance Python application that polls the Hacker News
   - `api.py`: Contains functions for interacting with the Hacker News API, including batch fetching and async support
   - `db.py`: Database operations (initialization, queries, updates, score tracking)
   - `main.py`: Main program logic and command-line interface
+  - `classifier.py`: Claude AI integration for interest-based filtering
 - `docs/`: Documentation files
   - `db_schema.md`: Database schema details
 - `pyproject.toml`: Project configuration and dependencies
@@ -52,6 +54,10 @@ hn-poll --hours 48 --min-score 5 --source best
 # Available sources: top, best, new
 hn-poll --source best
 
+# Use Claude AI for interest-based filtering
+export ANTHROPIC_API_KEY=your_api_key_here
+hn-poll --claude
+
 # Or run directly
 python src/main.py
 ```
@@ -75,7 +81,12 @@ python src/main.py
    - Quality (default: stories with scores ≥ 10)
    - Source selection (top, best, or new stories)
 
-5. **Console Output**: High-quality stories are formatted and displayed to the console, sorted by score.
+5. **Interest-Based Filtering (Optional)**: When using the `--claude` flag:
+   - Each story is analyzed by Claude AI against personalized interest categories
+   - Interest categories include technology, programming, security, DIY projects, and more
+   - Only stories matching user interests are kept in the final output
+
+6. **Console Output**: High-quality stories are formatted and displayed to the console, sorted by score.
 
 ## Development Notes
 
@@ -122,3 +133,6 @@ Potential improvements to consider:
 - Implement more advanced filtering options (by type, domain, keywords)
 - Add user configuration file for persistent settings
 - Add a full test suite with pytest
+- Improve Claude AI integration with response caching
+- Add ability to customize interest categories via configuration file
+- Create visualization of story score trends over time

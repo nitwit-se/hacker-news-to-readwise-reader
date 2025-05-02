@@ -14,6 +14,7 @@ from src.db import get_last_oldest_id, update_last_oldest_id
 from src.db import save_or_update_stories, get_stories_within_timeframe
 from src.api import get_stories_until_cutoff, get_stories_details_async, get_stories_from_maxitem
 from src.api import get_filtered_stories_async
+from src.classifier import is_interesting
 
 def format_story(story):
     """Format a story for console output.
@@ -105,6 +106,8 @@ def main():
                         help='Source to fetch stories from (top, best, or new)')
     parser.add_argument('--limit', type=int, default=500,
                         help='Maximum number of stories to fetch from source')
+    parser.add_argument('--claude', action='store_true',
+                        help='Use Claude AI to filter stories by personal interest')
     args = parser.parse_args()
     
     print(f"Polling Hacker News {args.source} stories from the past {args.hours} hours with score >= {args.min_score}...\n")
@@ -119,9 +122,29 @@ def main():
         ))
         
         if high_score_stories:
-            print(f"Top stories from the past {args.hours} hours (score >= {args.min_score}):")
-            for story in high_score_stories:
-                print(format_story(story))
+            # Apply Claude AI filter if requested
+            if args.claude:
+                print("\nUsing Claude AI to filter stories by personal interest...")
+                filtered_count = 0
+                interesting_stories = []
+                
+                for story in high_score_stories:
+                    if is_interesting(story):
+                        interesting_stories.append(story)
+                        filtered_count += 1
+                
+                filtered_out = len(high_score_stories) - filtered_count
+                print(f"AI filter applied: {filtered_count} stories match your interests ({filtered_out} filtered out)\n")
+                
+                high_score_stories = interesting_stories
+            
+            # Display final results
+            if high_score_stories:
+                print(f"Top stories from the past {args.hours} hours (score >= {args.min_score}):")
+                for story in high_score_stories:
+                    print(format_story(story))
+            else:
+                print(f"No stories matched your criteria from the past {args.hours} hours.")
         else:
             print(f"No stories with score >= {args.min_score} found from the past {args.hours} hours.")
     

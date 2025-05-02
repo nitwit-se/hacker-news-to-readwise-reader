@@ -42,12 +42,15 @@
 - [x] Add story filtering options (by score, timeframe)
 - [x] Implement command-line arguments
 - [x] Optimize performance with direct source selection (top/best/new)
+- [x] Add Claude AI integration for interest-based filtering
 - [ ] Create simple web dashboard
 - [ ] Add export functionality
 - [ ] Add colorful console output
 - [ ] Implement full test suite
 - [ ] Add user configuration file
 - [ ] Add more advanced filtering (by type, domain, keywords)
+- [ ] Improve Claude AI integration with response caching
+- [ ] Add ability to customize interest categories via config file
 
 ## Project Management
 - [x] Update TODO.md with completed items

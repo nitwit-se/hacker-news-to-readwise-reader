@@ -12,15 +12,18 @@ A high-performance Python application that polls Hacker News for high-quality st
 - Uses asynchronous requests with high concurrency for optimal performance
 - Stores and updates story data in a local SQLite database
 - Intelligently tracks processed stories to minimize redundant fetching
+- Optional Claude AI-powered personalized filtering based on your interests
 
 ## Requirements
 
 - Python 3.12+
 - `uv` Python package manager
+- Anthropic API key (only for Claude filtering)
 - Dependencies (automatically installed):
   - requests: HTTP library for API calls
   - aiohttp: Asynchronous HTTP client
   - asyncio: Asynchronous I/O library
+  - anthropic: Claude AI API client (for personalized filtering)
 
 ## Installation
 
@@ -77,6 +80,16 @@ Options:
 - `--min-score N`: Specify minimum score threshold for displaying stories (default: 10)
 - `--source [top|best|new]`: Select which Hacker News feed to use (default: top)
 - `--limit N`: Maximum number of stories to fetch from source (default: 500)
+- `--claude`: Use Claude AI to filter stories by personal interest (requires ANTHROPIC_API_KEY)
+
+For Claude AI filtering:
+```bash
+# Set your Anthropic API key
+export ANTHROPIC_API_KEY=your_api_key_here
+
+# Run with Claude filtering
+hn-poll --claude
+```
 
 ## How It Works
 
@@ -91,12 +104,17 @@ Options:
    - Updates scores for existing stories
    - Tracks the oldest ID for optimization
 
-3. The filtered, high-quality stories are:
+3. If Claude filtering is enabled, the application:
+   - Sends each story title and URL to Claude AI
+   - Determines if the story matches your specified interests
+   - Keeps only stories deemed interesting by Claude
+
+4. The filtered, high-quality stories are:
    - Sorted by score in descending order
    - Displayed directly in the console
    - Stored in the database for future reference
 
-4. The program tracks metadata to optimize future runs:
+5. The program tracks metadata to optimize future runs:
    - Last poll time
    - Oldest story ID processed
 
@@ -121,3 +139,19 @@ The database file (`hn_stories.db`) is created in the same directory as the scri
 - Early filtering reduces database operations and memory usage
 - Optimized for fast execution even with large numbers of stories
 - The application is designed to be run periodically (e.g., hourly or daily)
+
+## Personalized Filtering
+
+When using the `--claude` flag, the application leverages Claude AI to identify stories matching your interests:
+
+- Current interest categories:
+  - Technology & Tools: Emacs, Linux, NixOS, MacOS, Apple hardware, e-book readers
+  - Programming & Computer Science: Python, Julia, Lisp, functional programming, logic programming
+  - Security & Hacking: InfoSec, cybersecurity, ethical hacking, cracking
+  - Projects & Creativity: DIY/home projects, creative coding, hardware hacking
+  - Science & Research: AI, machine learning, climate change, scientific computing
+  - Books & Reading: Technical books, e-book technology, digital reading
+
+To customize these interests, edit the system prompt in `src/classifier.py`.
+
+Claude analyzes story titles and domains to determine if they match your interests. This provides a personalized feed of only the stories you're likely to find interesting.

@@ -2,6 +2,10 @@
 
 This document outlines the database schema used in the Hacker News Poller project.
 
+## Overview
+
+The Hacker News Poller uses a SQLite database to store story data and application metadata. The database helps track stories over time, update their scores, and optimize performance for future runs.
+
 ## Tables
 
 ### Stories Table
