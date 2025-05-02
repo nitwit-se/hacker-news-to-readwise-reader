@@ -293,13 +293,14 @@ def save_or_update_stories(stories):
     
     return new_count, update_count
 
-def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None):
+def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None, only_unscored=False):
     """Get all stories within the specified timeframe with at least the minimum score.
     
     Args:
         hours (int): Number of hours to look back
         min_score (int): Minimum score threshold
         min_relevance (int, optional): Minimum relevance score threshold
+        only_unscored (bool): If True, only return stories without a relevance score
         
     Returns:
         list: List of story dictionaries
@@ -316,8 +317,11 @@ def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None):
     query = 'SELECT * FROM stories WHERE time >= ? AND score >= ?'
     params = [cutoff_timestamp, min_score]
     
-    # Add relevance filter if specified
-    if min_relevance is not None:
+    # Add filter for unscored stories if requested
+    if only_unscored:
+        query += ' AND relevance_score IS NULL'
+    # Otherwise, add relevance filter if specified
+    elif min_relevance is not None:
         query += ' AND (relevance_score IS NULL OR relevance_score >= ?)'
         params.append(min_relevance)
     
@@ -383,3 +387,67 @@ def get_story_with_content(story_id):
     story = dict(row)
     
     return story
+
+def get_unscored_stories_in_batches(hours=None, min_score=0, batch_size=10):
+    """Get unscored stories in batches for efficient processing.
+    
+    Args:
+        hours (int, optional): Number of hours to look back. If None, gets all unscored stories.
+        min_score (int): Minimum score threshold
+        batch_size (int): Number of stories to retrieve in each batch
+        
+    Returns:
+        list: List of batches of story dictionaries
+    """
+    # Get all unscored stories
+    if hours is not None:
+        all_stories = get_stories_within_timeframe(hours=hours, min_score=min_score, only_unscored=True)
+    else:
+        # Get all unscored stories without time limit
+        all_stories = get_all_unscored_stories(min_score=min_score)
+    
+    # Split into batches
+    batches = []
+    for i in range(0, len(all_stories), batch_size):
+        batch = all_stories[i:i + batch_size]
+        if batch:  # Only add non-empty batches
+            batches.append(batch)
+    
+    return batches
+
+def get_all_unscored_stories(min_score=0):
+    """Get all unscored stories regardless of age.
+    
+    Args:
+        min_score (int): Minimum score threshold
+        
+    Returns:
+        list: List of story dictionaries
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # First check if the table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stories'")
+    table_exists = cursor.fetchone()
+    
+    if not table_exists:
+        return []
+    
+    # Query for all stories without a relevance score
+    query = 'SELECT * FROM stories WHERE relevance_score IS NULL AND score >= ?'
+    params = [min_score]
+    
+    # Add ordering
+    query += ' ORDER BY score DESC'
+    
+    # Execute query
+    cursor.execute(query, tuple(params))
+    
+    rows = cursor.fetchall()
+    stories = [dict(row) for row in rows]
+    
+    conn.close()
+    
+    return stories

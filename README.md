@@ -82,6 +82,8 @@ Options:
 - `--limit N`: Maximum number of stories to fetch from source (default: 500)
 - `--claude`: Use Claude AI to calculate relevance scores (requires ANTHROPIC_API_KEY)
 - `--min-relevance N`: Set minimum relevance score threshold for Claude filtering (default: 75)
+- `--scored-only`: Only show stories that already have a relevance score (no new API calls)
+- `--background-score`: Use background scoring process instead of inline scoring
 
 For Claude AI relevance scoring and filtering:
 ```bash
@@ -93,6 +95,27 @@ hn-poll --claude
 
 # Run with Claude relevance scoring and custom threshold
 hn-poll --claude --min-relevance 60
+
+# Only show stories that already have scores (no API calls)
+hn-poll --claude --scored-only
+
+# Show all stories but suggest running background scorer for unscored stories
+hn-poll --claude --background-score
+```
+
+For background processing of relevance scores:
+```bash
+# Run the background scorer to process ALL unscored stories in the database
+python src/background_scorer.py
+
+# Process only stories from the past 72 hours
+python src/background_scorer.py --hours 72
+
+# Only score stories with at least 5 points
+python src/background_scorer.py --min-score 5
+
+# Customize background scoring further
+python src/background_scorer.py --batch-size 20 --max-stories 100
 ```
 
 ## How It Works
@@ -175,5 +198,16 @@ Each story receives a relevance score from 0-100 indicating how well it matches 
 - The Anthropic API is only called for new stories without existing scores
 - Users can adjust the relevance threshold to be more or less selective
 - Scores are displayed with each story, providing insight into the filtering system
+- Domain-based caching reduces API calls for common websites
+- Batch processing with asynchronous requests for performance
+- Background scoring option to separate API calls from main application
+- "Scored-only" mode to use the system without making any API calls
+
+The optimized relevance scoring system employs several strategies to minimize API usage:
+1. **Database Persistence**: Scores are stored in the database so they only need to be calculated once
+2. **Domain Caching**: Common domains are cached to avoid redundant scoring
+3. **Batch Processing**: Processes multiple stories concurrently for efficiency
+4. **Background Processing**: Optional separation of API calls into a background process
+5. **Flexible Modes**: Choose between inline scoring, background scoring, or scored-only modes
 
 Claude analyzes story titles and domains to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.
