@@ -4,14 +4,14 @@ from anthropic import Anthropic
 # Initialize the Anthropic client
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-def is_interesting(story):
-    """Classify if a HN story matches user interests.
+def get_relevance_score(story):
+    """Calculate a relevance score for how well a HN story matches user interests.
     
     Args:
         story (dict): Story details from the Hacker News API
         
     Returns:
-        bool: True if the story matches user interests, False otherwise
+        int: Relevance score from 0-100, where higher values indicate more relevant content
     """
     title = story.get('title', '')
     url = story.get('url', '')
@@ -25,7 +25,7 @@ def is_interesting(story):
     prompt = f"Title: {title}\nDomain: {domain}\nURL: {url}"
     
     # Interest categories defined in the system prompt
-    system_prompt = """Classify if this Hacker News story would interest someone with these interests:
+    system_prompt = """Evaluate how strongly this Hacker News story would match the following interest categories:
 
 1. Technology & Tools:
    - Emacs, Linux, NixOS, MacOS, Apple hardware
@@ -55,7 +55,13 @@ def is_interesting(story):
    - Technical books, programming books
    - E-book technology, digital reading
 
-ONLY respond with YES or NO and nothing else."""
+Rate the story's relevance to these interests on a scale from 0-100, where:
+- 0-25: Not relevant to these interests
+- 26-50: Slightly relevant to these interests
+- 51-75: Moderately relevant to these interests
+- 76-100: Highly relevant to these interests
+
+ONLY respond with a single integer between 0 and 100, and nothing else."""
     
     # Call Claude API to classify
     try:
@@ -69,11 +75,49 @@ ONLY respond with YES or NO and nothing else."""
             ]
         )
         
-        # Parse the response - this assumes Claude follows instructions and returns YES/NO
-        response = message.content[0].text.strip().upper()
-        return "YES" in response
+        # Parse the response - this assumes Claude follows instructions and returns a number
+        response = message.content[0].text.strip()
+        try:
+            score = int(response)
+            # Ensure the score is within the valid range
+            return max(0, min(100, score))
+        except ValueError:
+            # If we couldn't parse an integer, make a best effort to continue
+            if "not relevant" in response.lower():
+                return 0
+            elif "highly relevant" in response.lower():
+                return 90
+            elif "moderately relevant" in response.lower():
+                return 60
+            elif "slightly relevant" in response.lower():
+                return 30
+            else:
+                return 0
         
     except Exception as e:
-        # Log error and default to not interesting if API call fails
-        print(f"Error classifying story: {e}")
-        return False
+        # Log error and default to 0 if API call fails
+        print(f"Error calculating relevance score: {e}")
+        return 0
+
+# Keep the old function for backward compatibility, but use the new one internally
+def is_interesting(story, threshold=75):
+    """Classify if a HN story matches user interests using a relevance score.
+    
+    Args:
+        story (dict): Story details from the Hacker News API
+        threshold (int): Minimum relevance score to be considered interesting (0-100)
+        
+    Returns:
+        bool: True if the story's relevance score exceeds the threshold
+    """
+    # If we already have a stored relevance score, use it
+    if 'relevance_score' in story and story['relevance_score'] is not None:
+        return story['relevance_score'] >= threshold
+    
+    # Otherwise, calculate a new score
+    score = get_relevance_score(story)
+    
+    # Store the score in the story dictionary for potential later use
+    story['relevance_score'] = score
+    
+    return score >= threshold

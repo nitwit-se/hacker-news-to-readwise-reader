@@ -43,13 +43,15 @@
 - [x] Implement command-line arguments
 - [x] Optimize performance with direct source selection (top/best/new)
 - [x] Add Claude AI integration for interest-based filtering
+- [x] Implement relevance score storage for Claude AI integration
+- [x] Add database persistence for relevance scores
+- [x] Improve Claude AI integration with response caching via database
 - [ ] Create simple web dashboard
 - [ ] Add export functionality
 - [ ] Add colorful console output
 - [ ] Implement full test suite
 - [ ] Add user configuration file
 - [ ] Add more advanced filtering (by type, domain, keywords)
-- [ ] Improve Claude AI integration with response caching
 - [ ] Add ability to customize interest categories via config file
 
 ## Project Management

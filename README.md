@@ -80,15 +80,19 @@ Options:
 - `--min-score N`: Specify minimum score threshold for displaying stories (default: 10)
 - `--source [top|best|new]`: Select which Hacker News feed to use (default: top)
 - `--limit N`: Maximum number of stories to fetch from source (default: 500)
-- `--claude`: Use Claude AI to filter stories by personal interest (requires ANTHROPIC_API_KEY)
+- `--claude`: Use Claude AI to calculate relevance scores (requires ANTHROPIC_API_KEY)
+- `--min-relevance N`: Set minimum relevance score threshold for Claude filtering (default: 75)
 
-For Claude AI filtering:
+For Claude AI relevance scoring and filtering:
 ```bash
 # Set your Anthropic API key
 export ANTHROPIC_API_KEY=your_api_key_here
 
-# Run with Claude filtering
+# Run with Claude relevance scoring
 hn-poll --claude
+
+# Run with Claude relevance scoring and custom threshold
+hn-poll --claude --min-relevance 60
 ```
 
 ## How It Works
@@ -104,10 +108,12 @@ hn-poll --claude
    - Updates scores for existing stories
    - Tracks the oldest ID for optimization
 
-3. If Claude filtering is enabled, the application:
-   - Sends each story title and URL to Claude AI
-   - Determines if the story matches your specified interests
-   - Keeps only stories deemed interesting by Claude
+3. If Claude relevance scoring is enabled, the application:
+   - Sends each story title and URL to Claude AI for stories without existing scores
+   - Calculates a relevance score (0-100) indicating how well it matches your interests
+   - Stores the relevance scores in the database for future use
+   - Filters stories based on the minimum relevance threshold (default: 75)
+   - Displays relevance scores alongside other story information
 
 4. The filtered, high-quality stories are:
    - Sorted by score in descending order
@@ -122,12 +128,16 @@ hn-poll --claude
 
 The application uses SQLite3 to store:
 
-- Story details (ID, title, URL, score, author, timestamp, last updated time)
+- Story details including:
+  - ID, title, URL, score, author, timestamp, last updated time
+  - Relevance score (0-100, indicating how relevant the story is to user interests)
 - Metadata such as:
   - Last poll time
   - Last oldest ID processed (for optimization)
 
 The database file (`hn_stories.db`) is created in the same directory as the script.
+
+See [Database Schema](docs/db_schema.md) for more details on the database structure.
 
 ## Performance Considerations
 
@@ -140,9 +150,9 @@ The database file (`hn_stories.db`) is created in the same directory as the scri
 - Optimized for fast execution even with large numbers of stories
 - The application is designed to be run periodically (e.g., hourly or daily)
 
-## Personalized Filtering
+## Personalized Relevance Scoring
 
-When using the `--claude` flag, the application leverages Claude AI to identify stories matching your interests:
+When using the `--claude` flag, the application leverages Claude AI to calculate relevance scores for stories:
 
 - Current interest categories:
   - Technology & Tools: Emacs, Linux, NixOS, MacOS, Apple hardware, e-book readers
@@ -154,4 +164,16 @@ When using the `--claude` flag, the application leverages Claude AI to identify 
 
 To customize these interests, edit the system prompt in `src/classifier.py`.
 
-Claude analyzes story titles and domains to determine if they match your interests. This provides a personalized feed of only the stories you're likely to find interesting.
+Each story receives a relevance score from 0-100 indicating how well it matches your interests:
+- 0-25: Not relevant
+- 26-50: Slightly relevant
+- 51-75: Moderately relevant
+- 76-100: Highly relevant
+
+**Key advantages of the relevance score system:**
+- Scores are persisted in the database, minimizing redundant API calls
+- The Anthropic API is only called for new stories without existing scores
+- Users can adjust the relevance threshold to be more or less selective
+- Scores are displayed with each story, providing insight into the filtering system
+
+Claude analyzes story titles and domains to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.

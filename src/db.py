@@ -25,15 +25,18 @@ def init_db():
             time INTEGER NOT NULL,
             timestamp TEXT NOT NULL,
             type TEXT NOT NULL,
-            last_updated TEXT NOT NULL
+            last_updated TEXT NOT NULL,
+            relevance_score INTEGER
         )
         ''')
     else:
-        # Check if last_updated column exists and add it if not
+        # Check if columns exist and add them if not
         cursor.execute("PRAGMA table_info(stories)")
         columns = [column[1] for column in cursor.fetchall()]
         if 'last_updated' not in columns:
             cursor.execute("ALTER TABLE stories ADD COLUMN last_updated TEXT NOT NULL DEFAULT ''")
+        if 'relevance_score' not in columns:
+            cursor.execute("ALTER TABLE stories ADD COLUMN relevance_score INTEGER")
     
     # Create metadata table for tracking last poll time
     cursor.execute('''
@@ -137,9 +140,9 @@ def save_stories(stories):
             
             cursor.execute('''
             INSERT INTO stories (
-                id, title, url, score, by, time, timestamp, type, last_updated
+                id, title, url, score, by, time, timestamp, type, last_updated, relevance_score
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 story['id'],
                 story.get('title', ''),
@@ -149,7 +152,8 @@ def save_stories(stories):
                 story.get('time', 0),
                 current_time,
                 story.get('type', 'story'),
-                current_time
+                current_time,
+                story.get('relevance_score', None)
             ))
             new_count += 1
     
@@ -182,17 +186,30 @@ def update_story_scores(stories):
         result = cursor.fetchone()
         
         if result is not None:
-            # Only update if score has changed
-            if result[0] != story.get('score', 0):
-                cursor.execute('''
-                UPDATE stories
-                SET score = ?, last_updated = ?
-                WHERE id = ?
-                ''', (
-                    story.get('score', 0),
-                    current_time,
-                    story['id']
-                ))
+            # Update if score has changed or we have a new relevance_score
+            if result[0] != story.get('score', 0) or 'relevance_score' in story:
+                # Check if we have a relevance score to update
+                if 'relevance_score' in story and story['relevance_score'] is not None:
+                    cursor.execute('''
+                    UPDATE stories
+                    SET score = ?, last_updated = ?, relevance_score = ?
+                    WHERE id = ?
+                    ''', (
+                        story.get('score', 0),
+                        current_time,
+                        story['relevance_score'],
+                        story['id']
+                    ))
+                else:
+                    cursor.execute('''
+                    UPDATE stories
+                    SET score = ?, last_updated = ?
+                    WHERE id = ?
+                    ''', (
+                        story.get('score', 0),
+                        current_time,
+                        story['id']
+                    ))
                 update_count += 1
     
     conn.commit()
@@ -228,9 +245,9 @@ def save_or_update_stories(stories):
             # New story - insert it
             cursor.execute('''
             INSERT INTO stories (
-                id, title, url, score, by, time, timestamp, type, last_updated
+                id, title, url, score, by, time, timestamp, type, last_updated, relevance_score
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 story['id'],
                 story.get('title', ''),
@@ -240,21 +257,35 @@ def save_or_update_stories(stories):
                 story.get('time', 0),
                 current_time,
                 story.get('type', 'story'),
-                current_time
+                current_time,
+                story.get('relevance_score', None)
             ))
             new_count += 1
         else:
-            # Existing story - update score if changed
-            if result[0] != story.get('score', 0):
-                cursor.execute('''
-                UPDATE stories
-                SET score = ?, last_updated = ?
-                WHERE id = ?
-                ''', (
-                    story.get('score', 0),
-                    current_time,
-                    story['id']
-                ))
+            # Existing story - update score if changed or if we have relevance_score
+            if result[0] != story.get('score', 0) or 'relevance_score' in story:
+                # Check if we have a relevance score to update
+                if 'relevance_score' in story and story['relevance_score'] is not None:
+                    cursor.execute('''
+                    UPDATE stories
+                    SET score = ?, last_updated = ?, relevance_score = ?
+                    WHERE id = ?
+                    ''', (
+                        story.get('score', 0),
+                        current_time,
+                        story['relevance_score'],
+                        story['id']
+                    ))
+                else:
+                    cursor.execute('''
+                    UPDATE stories
+                    SET score = ?, last_updated = ?
+                    WHERE id = ?
+                    ''', (
+                        story.get('score', 0),
+                        current_time,
+                        story['id']
+                    ))
                 update_count += 1
     
     conn.commit()
@@ -262,12 +293,13 @@ def save_or_update_stories(stories):
     
     return new_count, update_count
 
-def get_stories_within_timeframe(hours=24, min_score=0):
+def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None):
     """Get all stories within the specified timeframe with at least the minimum score.
     
     Args:
         hours (int): Number of hours to look back
         min_score (int): Minimum score threshold
+        min_relevance (int, optional): Minimum relevance score threshold
         
     Returns:
         list: List of story dictionaries
@@ -280,12 +312,20 @@ def get_stories_within_timeframe(hours=24, min_score=0):
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
     cutoff_timestamp = int(cutoff_time.timestamp())
     
-    # Get stories within timeframe with minimum score
-    cursor.execute('''
-    SELECT * FROM stories 
-    WHERE time >= ? AND score >= ?
-    ORDER BY score DESC
-    ''', (cutoff_timestamp, min_score))
+    # Base query
+    query = 'SELECT * FROM stories WHERE time >= ? AND score >= ?'
+    params = [cutoff_timestamp, min_score]
+    
+    # Add relevance filter if specified
+    if min_relevance is not None:
+        query += ' AND (relevance_score IS NULL OR relevance_score >= ?)'
+        params.append(min_relevance)
+    
+    # Add ordering
+    query += ' ORDER BY score DESC'
+    
+    # Execute query
+    cursor.execute(query, tuple(params))
     
     rows = cursor.fetchall()
     stories = [dict(row) for row in rows]

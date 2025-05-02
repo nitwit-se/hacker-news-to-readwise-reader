@@ -11,10 +11,10 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.db import init_db, get_last_poll_time, update_last_poll_time
 from src.db import get_last_oldest_id, update_last_oldest_id
-from src.db import save_or_update_stories, get_stories_within_timeframe
+from src.db import save_or_update_stories, get_stories_within_timeframe, update_story_scores
 from src.api import get_stories_until_cutoff, get_stories_details_async, get_stories_from_maxitem
 from src.api import get_filtered_stories_async
-from src.classifier import is_interesting
+from src.classifier import is_interesting, get_relevance_score
 
 def format_story(story):
     """Format a story for console output.
@@ -37,7 +37,13 @@ def format_story(story):
     
     # Create the output string
     output = f"\n{title}\n"
-    output += f"ID: {story_id} | Score: {score} | By: {author} | Posted: {time_str}\n"
+    
+    # Include relevance score if available
+    relevance_info = ""
+    if 'relevance_score' in story and story['relevance_score'] is not None:
+        relevance_info = f" | Relevance: {story['relevance_score']}"
+    
+    output += f"ID: {story_id} | Score: {score}{relevance_info} | By: {author} | Posted: {time_str}\n"
     
     if url:
         output += f"URL: {url}\n"
@@ -47,7 +53,7 @@ def format_story(story):
     
     return output
 
-async def poll_hacker_news_async(hours=24, min_score=10, source='top', limit=500):
+async def poll_hacker_news_async(hours=24, min_score=10, source='top', limit=500, min_relevance=None):
     """Poll Hacker News for high-quality stories using an optimized approach.
     
     Args:
@@ -55,6 +61,7 @@ async def poll_hacker_news_async(hours=24, min_score=10, source='top', limit=500
         min_score (int): Minimum score threshold for displaying stories
         source (str): Source to use - 'top', 'best', or 'new'
         limit (int): Maximum number of stories to fetch from source
+        min_relevance (int, optional): Minimum relevance score threshold
         
     Returns:
         list: List of stories meeting the criteria
@@ -107,34 +114,54 @@ def main():
     parser.add_argument('--limit', type=int, default=500,
                         help='Maximum number of stories to fetch from source')
     parser.add_argument('--claude', action='store_true',
-                        help='Use Claude AI to filter stories by personal interest')
+                        help='Use Claude AI to calculate relevance scores for stories')
+    parser.add_argument('--min-relevance', type=int, default=75,
+                        help='Minimum relevance score threshold (0-100) when using Claude')
     args = parser.parse_args()
     
     print(f"Polling Hacker News {args.source} stories from the past {args.hours} hours with score >= {args.min_score}...\n")
     
     try:
         # Run the async function in the event loop
+        # Only pass min_relevance if Claude is enabled and we want to filter from database
+        min_relevance = None
+        if args.claude and args.min_relevance > 0:
+            # We'll do a manual filter later as we need to calculate scores for new stories
+            min_relevance = None
+            
         high_score_stories = asyncio.run(poll_hacker_news_async(
             hours=args.hours,
             min_score=args.min_score,
             source=args.source,
-            limit=args.limit
+            limit=args.limit,
+            min_relevance=min_relevance
         ))
         
         if high_score_stories:
-            # Apply Claude AI filter if requested
+            # Apply Claude AI relevance scoring if requested
             if args.claude:
-                print("\nUsing Claude AI to filter stories by personal interest...")
-                filtered_count = 0
-                interesting_stories = []
+                print("\nUsing Claude AI to calculate relevance scores...")
+                scored_stories = []
+                calculated_count = 0
                 
                 for story in high_score_stories:
-                    if is_interesting(story):
-                        interesting_stories.append(story)
-                        filtered_count += 1
+                    # Only calculate scores for stories without an existing relevance_score
+                    if 'relevance_score' not in story or story['relevance_score'] is None:
+                        # Use the relevance score function from classifier
+                        score = get_relevance_score(story)
+                        story['relevance_score'] = score
+                        calculated_count += 1
+                    scored_stories.append(story)
                 
-                filtered_out = len(high_score_stories) - filtered_count
-                print(f"AI filter applied: {filtered_count} stories match your interests ({filtered_out} filtered out)\n")
+                # Update scores in the database
+                if calculated_count > 0:
+                    update_story_scores(scored_stories)
+                    print(f"Calculated relevance scores for {calculated_count} new stories and updated database.")
+                
+                # Filter stories by relevance score
+                interesting_stories = [s for s in scored_stories if s.get('relevance_score', 0) >= args.min_relevance]
+                filtered_out = len(scored_stories) - len(interesting_stories)
+                print(f"Relevance filter applied: {len(interesting_stories)} stories above threshold of {args.min_relevance} ({filtered_out} filtered out)\n")
                 
                 high_score_stories = interesting_stories
             

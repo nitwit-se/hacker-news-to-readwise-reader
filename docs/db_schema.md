@@ -20,7 +20,8 @@ CREATE TABLE stories (
     time INTEGER NOT NULL,
     timestamp TEXT NOT NULL,
     type TEXT NOT NULL,
-    last_updated TEXT NOT NULL
+    last_updated TEXT NOT NULL,
+    relevance_score INTEGER
 )
 ```
 
@@ -37,6 +38,7 @@ The `stories` table stores all Hacker News stories with their associated metadat
 - `timestamp`: The formatted timestamp of when the story was added to our database
 - `type`: The type of the story (e.g., "story", "job", "poll")
 - `last_updated`: The formatted timestamp of when the story was last updated in our database
+- `relevance_score`: A score from 0 to 100 indicating the story's relevance to user interests (higher is more relevant)
 
 ### Metadata Table
 
