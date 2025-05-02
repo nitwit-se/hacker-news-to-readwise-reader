@@ -56,18 +56,17 @@ def format_story(story):
     
     return output
 
-async def poll_hacker_news_async(hours=24, min_score=30, source='top', limit=500, min_relevance=None):
-    """Poll Hacker News for high-quality stories using an optimized approach.
+async def fetch_stories_async(hours=24, min_score=30, source='top', limit=500):
+    """Fetch stories from Hacker News and save to the database.
     
     Args:
         hours (int): Number of hours to look back
         min_score (int): Minimum score threshold for displaying stories
         source (str): Source to use - 'top', 'best', or 'new'
         limit (int): Maximum number of stories to fetch from source
-        min_relevance (int, optional): Minimum relevance score threshold
         
     Returns:
-        list: List of stories meeting the criteria
+        tuple: (new_count, update_count) - Number of new and updated stories
     """
     # Initialize database if not exists
     init_db()
@@ -103,135 +102,191 @@ async def poll_hacker_news_async(hours=24, min_score=30, source='top', limit=500
     # Update the last poll time
     update_last_poll_time()
     
-    return stories
+    return new_count, update_count
+
+async def score_stories_async(hours=24, min_score=30, batch_size=10):
+    """Calculate relevance scores for unscored stories.
+    
+    Args:
+        hours (int): Number of hours to look back for unscored stories
+        min_score (int): Minimum HN score threshold for stories to score
+        batch_size (int): Number of stories to process in each batch
+        
+    Returns:
+        int: Number of stories scored
+    """
+    # Initialize database if not exists
+    init_db()
+    
+    # Get batches of unscored stories
+    story_batches = get_unscored_stories_in_batches(hours=hours, min_score=min_score, batch_size=batch_size)
+    
+    if not story_batches:
+        print("No unscored stories found that meet the criteria.")
+        return 0
+    
+    total_stories = sum(len(batch) for batch in story_batches)
+    print(f"Found {total_stories} unscored stories in {len(story_batches)} batches.")
+    
+    scored_count = 0
+    
+    # Process each batch asynchronously
+    for i, batch in enumerate(story_batches):
+        print(f"Processing batch {i+1}/{len(story_batches)} ({len(batch)} stories)...")
+        
+        # Process the batch asynchronously
+        processed_batch = await process_story_batch_async(batch)
+        scored_count += len(processed_batch)
+        
+        # Update the database after each batch
+        update_story_scores(processed_batch)
+        print(f"Updated database with scores for batch {i+1}.")
+        
+        # Short pause between batches to avoid rate limiting
+        if i < len(story_batches) - 1:
+            print("Pausing briefly before next batch...")
+            time.sleep(1)
+    
+    print(f"\nCalculated relevance scores for {scored_count} stories and updated database.")
+    return scored_count
+
+def show_stories(hours=24, min_hn_score=30, min_relevance=75):
+    """Display stories meeting criteria from the database.
+    
+    Args:
+        hours (int): Number of hours to look back
+        min_hn_score (int): Minimum HN score threshold
+        min_relevance (int): Minimum relevance score threshold
+        
+    Returns:
+        int: Number of stories displayed
+    """
+    # Initialize database if not exists
+    init_db()
+    
+    # Get stories matching criteria
+    print(f"Finding stories from the past {hours} hours with HN score >= {min_hn_score} and relevance score >= {min_relevance}...")
+    
+    # First get all stories with minimum HN score
+    all_stories = get_stories_within_timeframe(hours=hours, min_score=min_hn_score)
+    
+    if not all_stories:
+        print(f"No stories found with HN score >= {min_hn_score} from the past {hours} hours.")
+        return 0
+    
+    # Filter by relevance score
+    stories_with_relevance = [s for s in all_stories if 'relevance_score' in s and s['relevance_score'] is not None]
+    relevant_stories = [s for s in stories_with_relevance if s['relevance_score'] >= min_relevance]
+    
+    # Get stats for output
+    unscored_count = len(all_stories) - len(stories_with_relevance)
+    filtered_out = len(stories_with_relevance) - len(relevant_stories)
+    
+    # Print stats
+    print(f"Found {len(all_stories)} stories with HN score >= {min_hn_score}")
+    print(f"Of these, {len(stories_with_relevance)} have relevance scores ({unscored_count} unscored)")
+    print(f"After filtering: {len(relevant_stories)} stories with relevance >= {min_relevance} ({filtered_out} filtered out)\n")
+    
+    # Display stories
+    if relevant_stories:
+        # Sort by relevance score, then by HN score
+        relevant_stories.sort(key=lambda s: (s['relevance_score'], s['score']), reverse=True)
+        
+        print(f"Top stories from the past {hours} hours (HN score >= {min_hn_score}, relevance >= {min_relevance}):")
+        for story in relevant_stories:
+            print(format_story(story))
+    else:
+        print(f"No stories matched your criteria from the past {hours} hours.")
+    
+    return len(relevant_stories)
+
+def cmd_fetch(args):
+    """Handle the 'fetch' subcommand."""
+    print(f"Fetching stories from Hacker News {args.source}...")
+    new_count, update_count = asyncio.run(fetch_stories_async(
+        hours=args.hours,
+        min_score=args.min_score,
+        source=args.source,
+        limit=args.limit
+    ))
+    print(f"Done! Added {new_count} new stories and updated {update_count} existing stories.")
+    return 0
+
+def cmd_score(args):
+    """Handle the 'score' subcommand."""
+    print("Calculating relevance scores for unscored stories...")
+    scored_count = asyncio.run(score_stories_async(
+        hours=args.hours,
+        min_score=args.min_score,
+        batch_size=args.batch_size
+    ))
+    print(f"Done! Calculated relevance scores for {scored_count} stories.")
+    return 0
+
+def cmd_show(args):
+    """Handle the 'show' subcommand."""
+    show_stories(
+        hours=args.hours,
+        min_hn_score=args.min_score,
+        min_relevance=args.min_relevance
+    )
+    return 0
 
 def main():
     """Main entry point for the program."""
-    parser = argparse.ArgumentParser(description='Poll Hacker News for recent high-quality stories')
-    parser.add_argument('--hours', type=int, default=24,
-                        help='Number of hours to look back')
-    parser.add_argument('--min-score', type=int, default=30,
-                        help='Minimum score threshold for displaying stories')
-    parser.add_argument('--source', type=str, choices=['top', 'best', 'new'], default='top',
-                        help='Source to fetch stories from (top, best, or new)')
-    parser.add_argument('--limit', type=int, default=500,
-                        help='Maximum number of stories to fetch from source')
-    parser.add_argument('--claude', action='store_true',
-                        help='Use Claude AI to calculate relevance scores for stories')
-    parser.add_argument('--min-relevance', type=int, default=75,
-                        help='Minimum relevance score threshold (0-100) when using Claude')
-    parser.add_argument('--scored-only', action='store_true',
-                        help='Only show stories that already have a relevance score (no new API calls)')
-    parser.add_argument('--background-score', action='store_true',
-                        help='Use background scoring process instead of inline scoring')
+    # Create the top-level parser
+    parser = argparse.ArgumentParser(
+        description='Hacker News story poller and relevance filter',
+        epilog='Run without a command or with "show" to display stories'
+    )
+    
+    # Create subparsers for each command
+    subparsers = parser.add_subparsers(dest='command', help='Command to run')
+    
+    # Common arguments
+    common_parser = argparse.ArgumentParser(add_help=False)
+    common_parser.add_argument('--hours', type=int, default=24,
+                            help='Number of hours to look back (default: 24)')
+    common_parser.add_argument('--min-score', type=int, default=30,
+                            help='Minimum HN score threshold (default: 30)')
+    
+    # 'fetch' command
+    fetch_parser = subparsers.add_parser('fetch', parents=[common_parser],
+                                     help='Fetch stories from Hacker News')
+    fetch_parser.add_argument('--source', type=str, choices=['top', 'best', 'new'], default='top',
+                          help='Source to fetch stories from (default: top)')
+    fetch_parser.add_argument('--limit', type=int, default=500,
+                          help='Maximum number of stories to fetch (default: 500)')
+    fetch_parser.set_defaults(func=cmd_fetch)
+    
+    # 'score' command
+    score_parser = subparsers.add_parser('score', parents=[common_parser],
+                                     help='Calculate relevance scores for unscored stories')
+    score_parser.add_argument('--batch-size', type=int, default=10,
+                          help='Number of stories to process in each batch (default: 10)')
+    score_parser.set_defaults(func=cmd_score)
+    
+    # 'show' command
+    show_parser = subparsers.add_parser('show', parents=[common_parser],
+                                    help='Display stories meeting criteria')
+    show_parser.add_argument('--min-relevance', type=int, default=75,
+                         help='Minimum relevance score threshold (default: 75)')
+    show_parser.set_defaults(func=cmd_show)
+    
+    # Parse arguments
     args = parser.parse_args()
     
-    print(f"Polling Hacker News {args.source} stories from the past {args.hours} hours with score >= {args.min_score}...\n")
-    
     try:
-        # Run the async function in the event loop
-        # Handle parameters for optimized relevance filtering
-        min_relevance = None
+        # Initialize the database in any case
+        init_db()
         
-        # If we want scored only stories, we can filter directly from the database
-        if args.claude and args.scored_only and args.min_relevance > 0:
-            min_relevance = args.min_relevance
-            print("Using scored-only mode: Only showing stories with existing relevance scores.")
-        elif args.claude and args.min_relevance > 0:
-            # Otherwise, we'll do a manual filter after potentially calculating new scores
-            min_relevance = None
-            
-        high_score_stories = asyncio.run(poll_hacker_news_async(
-            hours=args.hours,
-            min_score=args.min_score,
-            source=args.source,
-            limit=args.limit,
-            min_relevance=min_relevance
-        ))
+        # If no command specified, default to 'show'
+        if not args.command:
+            return cmd_show(args)
         
-        if high_score_stories:
-            # Apply Claude AI relevance scoring if requested
-            if args.claude:
-                print("\nUsing Claude AI to filter stories by relevance...")
-                
-                # First, filter out stories that already have relevance scores
-                stories_with_scores = [s for s in high_score_stories if 'relevance_score' in s and s['relevance_score'] is not None]
-                unscored_stories = [s for s in high_score_stories if 'relevance_score' not in s or s['relevance_score'] is None]
-                
-                calculated_count = 0
-                
-                # Handle different scoring modes
-                if args.scored_only:
-                    # Scored-only mode - don't calculate new scores
-                    print(f"Scored-only mode active. Using {len(stories_with_scores)} stories with existing scores.")
-                    print(f"Skipping {len(unscored_stories)} stories without scores.")
-                    
-                elif args.background_score and unscored_stories:
-                    # Background scoring mode - don't calculate scores now but suggest running the background script
-                    print(f"Background scoring mode active. Found {len(unscored_stories)} stories without scores.")
-                    print("To calculate scores for these stories, run the background scorer:")
-                    print(f"python src/background_scorer.py --hours {args.hours} --min-score {args.min_score}")
-                    
-                    # Include unscored stories in the results but with NULL relevance score
-                    stories_with_scores.extend(unscored_stories)
-                    
-                elif unscored_stories:
-                    # Standard inline scoring mode
-                    print(f"Found {len(unscored_stories)} stories without relevance scores...")
-                    # Process unscored stories in batches
-                    batch_size = 10  # Adjust based on API rate limits
-                    story_batches = []
-                    for i in range(0, len(unscored_stories), batch_size):
-                        batch = unscored_stories[i:i + batch_size]
-                        if batch:
-                            story_batches.append(batch)
-                    
-                    # Process each batch asynchronously
-                    for i, batch in enumerate(story_batches):
-                        print(f"Processing batch {i+1}/{len(story_batches)} ({len(batch)} stories)...")
-                        # Process the batch asynchronously
-                        processed_batch = asyncio.run(process_story_batch_async(batch))
-                        stories_with_scores.extend(processed_batch)
-                        calculated_count += len(batch)
-                        
-                        # Update the database after each batch
-                        update_story_scores(processed_batch)
-                        print(f"Updated database with scores for batch {i+1}.")
-                        
-                        # Short pause between batches to avoid rate limiting
-                        if i < len(story_batches) - 1:
-                            print("Pausing briefly before next batch...")
-                            time.sleep(1)
-                else:
-                    print("All stories already have relevance scores. No API calls needed.")
-                
-                if calculated_count > 0:
-                    print(f"Calculated relevance scores for {calculated_count} new stories and updated database.")
-                
-                # Filter stories by relevance score if not in background mode (which shows all stories)
-                if args.background_score:
-                    # In background mode, include all stories but mark unscored ones
-                    high_score_stories = stories_with_scores
-                    for story in high_score_stories:
-                        if 'relevance_score' not in story or story['relevance_score'] is None:
-                            story['relevance_score'] = None
-                else:
-                    # Normal mode - filter by relevance score
-                    interesting_stories = [s for s in stories_with_scores if s.get('relevance_score', 0) >= args.min_relevance]
-                    filtered_out = len(stories_with_scores) - len(interesting_stories)
-                    print(f"Relevance filter applied: {len(interesting_stories)} stories above threshold of {args.min_relevance} ({filtered_out} filtered out)\n")
-                    high_score_stories = interesting_stories
-            
-            # Display final results
-            if high_score_stories:
-                print(f"Top stories from the past {args.hours} hours (score >= {args.min_score}):")
-                for story in high_score_stories:
-                    print(format_story(story))
-            else:
-                print(f"No stories matched your criteria from the past {args.hours} hours.")
-        else:
-            print(f"No stories with score >= {args.min_score} found from the past {args.hours} hours.")
-    
+        # Otherwise, run the appropriate command
+        return args.func(args)
+        
     except KeyboardInterrupt:
         print("\nOperation cancelled by user.")
         return 1

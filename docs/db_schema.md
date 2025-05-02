@@ -68,7 +68,26 @@ The `metadata` table stores application-level metadata, such as the last time st
 ```sql
 SELECT * FROM stories 
 WHERE time >= (strftime('%s', 'now') - 24*60*60)
-AND score >= 10
+AND score >= 30
+ORDER BY score DESC
+```
+
+### Get Stories with High Relevance Scores
+
+```sql
+SELECT * FROM stories 
+WHERE time >= (strftime('%s', 'now') - 24*60*60)
+AND score >= 30
+AND relevance_score >= 75
+ORDER BY relevance_score DESC, score DESC
+```
+
+### Get Unscored Stories for Processing
+
+```sql
+SELECT * FROM stories 
+WHERE relevance_score IS NULL
+AND score >= 30
 ORDER BY score DESC
 ```
 
@@ -80,11 +99,40 @@ SET score = ?, last_updated = ?
 WHERE id = ?
 ```
 
-### Check for Stories Within Timeframe
+### Update Story with Relevance Score
 
 ```sql
-SELECT * FROM stories 
-WHERE time >= ?
-AND score >= ?
-ORDER BY score DESC
+UPDATE stories
+SET score = ?, last_updated = ?, relevance_score = ?
+WHERE id = ?
 ```
+
+### Get Relevance Statistics
+
+```sql
+SELECT 
+  COUNT(*) as total_stories,
+  SUM(CASE WHEN relevance_score IS NOT NULL THEN 1 ELSE 0 END) as scored_stories,
+  AVG(relevance_score) as avg_score,
+  MIN(relevance_score) as min_score,
+  MAX(relevance_score) as max_score
+FROM stories
+```
+
+## Application Workflow
+
+The database is used in three distinct operational modes:
+
+1. **Fetch Mode** - Retrieving and storing stories:
+   - Get the last poll time and oldest ID
+   - Save new stories and update existing ones
+   - Update metadata for the next run
+
+2. **Score Mode** - Calculating relevance scores:
+   - Retrieve unscored stories
+   - Update stories with new relevance scores
+
+3. **Show Mode** - Displaying filtered stories:
+   - Filter stories by time period and HN score
+   - Filter stories by relevance score
+   - Sort and display results

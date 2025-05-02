@@ -182,14 +182,21 @@ def update_story_scores(stories):
     
     for story in stories:
         # Check if story exists
-        cursor.execute('SELECT score FROM stories WHERE id = ?', (story['id'],))
+        cursor.execute('SELECT score, relevance_score FROM stories WHERE id = ?', (story['id'],))
         result = cursor.fetchone()
         
         if result is not None:
-            # Update if score has changed or we have a new relevance_score
-            if result[0] != story.get('score', 0) or 'relevance_score' in story:
-                # Check if we have a relevance score to update
-                if 'relevance_score' in story and story['relevance_score'] is not None:
+            # Unpack existing scores
+            existing_score, existing_relevance = result
+            
+            # Determine what fields to update
+            score_changed = existing_score != story.get('score', 0)
+            relevance_provided = 'relevance_score' in story and story['relevance_score'] is not None
+            relevance_changed = relevance_provided and existing_relevance != story['relevance_score']
+            
+            # Update only if something has changed
+            if score_changed or relevance_changed:
+                if relevance_provided:
                     cursor.execute('''
                     UPDATE stories
                     SET score = ?, last_updated = ?, relevance_score = ?
@@ -238,7 +245,7 @@ def save_or_update_stories(stories):
     
     for story in stories:
         # Check if story already exists
-        cursor.execute('SELECT score FROM stories WHERE id = ?', (story['id'],))
+        cursor.execute('SELECT score, relevance_score FROM stories WHERE id = ?', (story['id'],))
         result = cursor.fetchone()
         
         if result is None:
@@ -262,10 +269,17 @@ def save_or_update_stories(stories):
             ))
             new_count += 1
         else:
-            # Existing story - update score if changed or if we have relevance_score
-            if result[0] != story.get('score', 0) or 'relevance_score' in story:
-                # Check if we have a relevance score to update
-                if 'relevance_score' in story and story['relevance_score'] is not None:
+            # Unpack existing scores
+            existing_score, existing_relevance = result
+            
+            # Determine what fields to update
+            score_changed = existing_score != story.get('score', 0)
+            relevance_provided = 'relevance_score' in story and story['relevance_score'] is not None
+            relevance_changed = relevance_provided and existing_relevance != story['relevance_score']
+            
+            # Update only if something has changed
+            if score_changed or relevance_changed:
+                if relevance_provided:
                     cursor.execute('''
                     UPDATE stories
                     SET score = ?, last_updated = ?, relevance_score = ?
@@ -294,11 +308,11 @@ def save_or_update_stories(stories):
     return new_count, update_count
 
 def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None, only_unscored=False):
-    """Get all stories within the specified timeframe with at least the minimum score.
+    """Get all stories within the specified timeframe with filtering options.
     
     Args:
         hours (int): Number of hours to look back
-        min_score (int): Minimum score threshold
+        min_score (int): Minimum HN score threshold
         min_relevance (int, optional): Minimum relevance score threshold
         only_unscored (bool): If True, only return stories without a relevance score
         
@@ -313,17 +327,122 @@ def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None, only
     cutoff_time = datetime.utcnow() - timedelta(hours=hours)
     cutoff_timestamp = int(cutoff_time.timestamp())
     
-    # Base query
+    # Base query for the time period and HN score
     query = 'SELECT * FROM stories WHERE time >= ? AND score >= ?'
     params = [cutoff_timestamp, min_score]
     
-    # Add filter for unscored stories if requested
+    # Add relevance score filters if needed
     if only_unscored:
+        # Only unscored stories
         query += ' AND relevance_score IS NULL'
-    # Otherwise, add relevance filter if specified
     elif min_relevance is not None:
-        query += ' AND (relevance_score IS NULL OR relevance_score >= ?)'
+        # Only stories with relevance >= threshold
+        query += ' AND relevance_score >= ?'
         params.append(min_relevance)
+    
+    # Add ordering - sort by either relevance score or HN score
+    if min_relevance is not None:
+        # Primary sort by relevance, secondary by HN score
+        query += ' ORDER BY relevance_score DESC, score DESC'
+    else:
+        # Sort by HN score only
+        query += ' ORDER BY score DESC'
+    
+    # Execute query
+    cursor.execute(query, tuple(params))
+    
+    rows = cursor.fetchall()
+    stories = [dict(row) for row in rows]
+    
+    conn.close()
+    
+    return stories
+
+def get_high_quality_stories(hours=24, min_hn_score=30, min_relevance=75):
+    """Get high-quality stories meeting both HN score and relevance thresholds.
+    
+    Args:
+        hours (int): Number of hours to look back
+        min_hn_score (int): Minimum HN score threshold
+        min_relevance (int): Minimum relevance score threshold
+        
+    Returns:
+        list: List of story dictionaries meeting the criteria
+    """
+    # Simply use our optimized get_stories_within_timeframe function
+    return get_stories_within_timeframe(
+        hours=hours,
+        min_score=min_hn_score,
+        min_relevance=min_relevance
+    )
+
+def get_unscored_stories(hours=None, min_score=0):
+    """Get stories without relevance scores.
+    
+    Args:
+        hours (int, optional): Number of hours to look back. If None, gets all unscored stories.
+        min_score (int): Minimum HN score threshold
+        
+    Returns:
+        list: List of story dictionaries without relevance scores
+    """
+    if hours is not None:
+        # Get stories from the specified time period
+        return get_stories_within_timeframe(
+            hours=hours,
+            min_score=min_score,
+            only_unscored=True
+        )
+    else:
+        # Get all unscored stories without time constraint
+        return get_all_unscored_stories(min_score=min_score)
+
+def get_unscored_stories_in_batches(hours=None, min_score=0, batch_size=10):
+    """Get unscored stories in batches for efficient processing.
+    
+    Args:
+        hours (int, optional): Number of hours to look back. If None, gets all unscored stories.
+        min_score (int): Minimum score threshold
+        batch_size (int): Number of stories to retrieve in each batch
+        
+    Returns:
+        list: List of batches of story dictionaries
+    """
+    # Get all unscored stories
+    all_stories = get_unscored_stories(hours=hours, min_score=min_score)
+    
+    # Split into batches
+    batches = []
+    for i in range(0, len(all_stories), batch_size):
+        batch = all_stories[i:i + batch_size]
+        if batch:  # Only add non-empty batches
+            batches.append(batch)
+    
+    return batches
+
+def get_all_unscored_stories(min_score=0):
+    """Get all unscored stories regardless of age.
+    
+    Args:
+        min_score (int): Minimum score threshold
+        
+    Returns:
+        list: List of story dictionaries
+    """
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # First check if the table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stories'")
+    table_exists = cursor.fetchone()
+    
+    if not table_exists:
+        return []
+    
+    # Query for all stories without a relevance score
+    query = 'SELECT * FROM stories WHERE relevance_score IS NULL AND score >= ?'
+    params = [min_score]
     
     # Add ordering
     query += ' ORDER BY score DESC'
@@ -388,66 +507,54 @@ def get_story_with_content(story_id):
     
     return story
 
-def get_unscored_stories_in_batches(hours=None, min_score=0, batch_size=10):
-    """Get unscored stories in batches for efficient processing.
+def get_relevance_score_stats():
+    """Get statistics about relevance scores in the database.
     
-    Args:
-        hours (int, optional): Number of hours to look back. If None, gets all unscored stories.
-        min_score (int): Minimum score threshold
-        batch_size (int): Number of stories to retrieve in each batch
-        
     Returns:
-        list: List of batches of story dictionaries
-    """
-    # Get all unscored stories
-    if hours is not None:
-        all_stories = get_stories_within_timeframe(hours=hours, min_score=min_score, only_unscored=True)
-    else:
-        # Get all unscored stories without time limit
-        all_stories = get_all_unscored_stories(min_score=min_score)
-    
-    # Split into batches
-    batches = []
-    for i in range(0, len(all_stories), batch_size):
-        batch = all_stories[i:i + batch_size]
-        if batch:  # Only add non-empty batches
-            batches.append(batch)
-    
-    return batches
-
-def get_all_unscored_stories(min_score=0):
-    """Get all unscored stories regardless of age.
-    
-    Args:
-        min_score (int): Minimum score threshold
-        
-    Returns:
-        list: List of story dictionaries
+        dict: Statistics about relevance scores
     """
     conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
-    # First check if the table exists
+    # Check if the table exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='stories'")
     table_exists = cursor.fetchone()
     
     if not table_exists:
-        return []
+        return {
+            'total_stories': 0,
+            'scored_stories': 0,
+            'unscored_stories': 0,
+            'avg_score': 0,
+            'min_score': 0,
+            'max_score': 0
+        }
     
-    # Query for all stories without a relevance score
-    query = 'SELECT * FROM stories WHERE relevance_score IS NULL AND score >= ?'
-    params = [min_score]
+    # Get total count
+    cursor.execute('SELECT COUNT(*) FROM stories')
+    total_stories = cursor.fetchone()[0]
     
-    # Add ordering
-    query += ' ORDER BY score DESC'
+    # Get scored count
+    cursor.execute('SELECT COUNT(*) FROM stories WHERE relevance_score IS NOT NULL')
+    scored_stories = cursor.fetchone()[0]
     
-    # Execute query
-    cursor.execute(query, tuple(params))
+    # Calculate unscored
+    unscored_stories = total_stories - scored_stories
     
-    rows = cursor.fetchall()
-    stories = [dict(row) for row in rows]
+    # Get stats for scores
+    if scored_stories > 0:
+        cursor.execute('SELECT AVG(relevance_score), MIN(relevance_score), MAX(relevance_score) FROM stories WHERE relevance_score IS NOT NULL')
+        avg_score, min_score, max_score = cursor.fetchone()
+    else:
+        avg_score, min_score, max_score = 0, 0, 0
     
     conn.close()
     
-    return stories
+    return {
+        'total_stories': total_stories,
+        'scored_stories': scored_stories,
+        'unscored_stories': unscored_stories,
+        'avg_score': round(avg_score, 1) if avg_score else 0,
+        'min_score': min_score or 0,
+        'max_score': max_score or 0
+    }

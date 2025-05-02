@@ -31,12 +31,20 @@
 - [x] Add timeframe-based filtering (last 24 hours)
 - [x] Add optimization for recurring polls
 
+## Architecture Improvements ✅
+- [x] Refactor command structure to use subcommands
+- [x] Separate concerns into fetch, score, and show operations
+- [x] Implement consistent relevance score handling
+- [x] Improve filtering and sorting of stories by relevance
+- [x] Update documentation to reflect new architecture
+
 ## Testing & Documentation ✅
 - [x] Test with real Hacker News data
 - [x] Add comprehensive error handling
 - [x] Create README with usage instructions
 - [x] Document code with docstrings
 - [x] Update documentation to reflect new approach
+- [x] Test all operational modes to ensure they work correctly
 
 ## Optional Enhancements (Future Work)
 - [x] Add story filtering options (by score, timeframe)

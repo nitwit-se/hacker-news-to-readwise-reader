@@ -12,7 +12,7 @@ A high-performance Python application that polls Hacker News for high-quality st
 - Uses asynchronous requests with high concurrency for optimal performance
 - Stores and updates story data in a local SQLite database
 - Intelligently tracks processed stories to minimize redundant fetching
-- Optional Claude AI-powered personalized filtering based on your interests
+- Claude AI-powered personalized filtering based on your interests
 
 ## Requirements
 
@@ -57,9 +57,15 @@ A high-performance Python application that polls Hacker News for high-quality st
 
 ## Usage
 
-To poll for stories from the past 24 hours with scores ≥ 30:
+The application has three main commands:
 
-```
+- `fetch`: Fetch stories from Hacker News and store in the database
+- `score`: Calculate relevance scores for unscored stories using Claude AI
+- `show`: Display stories meeting criteria (default command if none specified)
+
+### Basic Usage
+
+```bash
 # Activate the environment if not already activated
 # For bash/zsh
 source .venv/bin/activate
@@ -67,85 +73,94 @@ source .venv/bin/activate
 # For fish shell
 source .venv/bin/activate.fish
 
-# Run using the installed command
+# Run using the installed command (defaults to 'show' command)
 hn-poll
 
 # Or run directly
 python src/main.py
 ```
 
-Options:
+### Fetch Command: Get stories from Hacker News
 
+```bash
+# Fetch top stories with default settings (24 hours, min score 30)
+hn-poll fetch
+
+# Fetch stories with custom parameters
+hn-poll fetch --hours 48 --min-score 20 --source new --limit 1000
+```
+
+Fetch Options:
 - `--hours N`: Specify how many hours back to look for stories (default: 24)
-- `--min-score N`: Specify minimum score threshold for displaying stories (default: 30)
+- `--min-score N`: Specify minimum score threshold for stories (default: 30)
 - `--source [top|best|new]`: Select which Hacker News feed to use (default: top)
 - `--limit N`: Maximum number of stories to fetch from source (default: 500)
-- `--claude`: Use Claude AI to calculate relevance scores (requires ANTHROPIC_API_KEY)
-- `--min-relevance N`: Set minimum relevance score threshold for Claude filtering (default: 75)
-- `--scored-only`: Only show stories that already have a relevance score (no new API calls)
-- `--background-score`: Use background scoring process instead of inline scoring
 
-For Claude AI relevance scoring and filtering:
+### Score Command: Calculate relevance scores with Claude AI
+
 ```bash
-# Set your Anthropic API key
+# Set your Anthropic API key (required for scoring)
 export ANTHROPIC_API_KEY=your_api_key_here
 
-# Run with Claude relevance scoring
-hn-poll --claude
+# Score all unscored stories with default settings
+hn-poll score
 
-# Run with Claude relevance scoring and custom threshold
-hn-poll --claude --min-relevance 60
-
-# Only show stories that already have scores (no API calls)
-hn-poll --claude --scored-only
-
-# Show all stories but suggest running background scorer for unscored stories
-hn-poll --claude --background-score
+# Score with custom parameters
+hn-poll score --hours 48 --min-score 20 --batch-size 20
 ```
 
-For background processing of relevance scores:
+Score Options:
+- `--hours N`: Specify how many hours back to look for unscored stories (default: 24)
+- `--min-score N`: Only score stories with at least this HN score (default: 30)
+- `--batch-size N`: Number of stories to process in each batch (default: 10)
+
+### Show Command: Display filtered stories
+
 ```bash
-# Run the background scorer to process ALL unscored stories in the database
-python src/background_scorer.py
+# Show stories meeting default criteria (HN score ≥ 30, relevance score ≥ 75)
+hn-poll show
 
-# Process only stories from the past 72 hours
-python src/background_scorer.py --hours 72
+# Or just (as 'show' is the default command)
+hn-poll
 
-# Only score stories with at least 5 points
-python src/background_scorer.py --min-score 5
-
-# Customize background scoring further
-python src/background_scorer.py --batch-size 20 --max-stories 100
+# Show with custom parameters
+hn-poll show --hours 48 --min-score 20 --min-relevance 60
 ```
+
+Show Options:
+- `--hours N`: Specify how many hours back to look for stories (default: 24)
+- `--min-score N`: Minimum HN score threshold (default: 30)
+- `--min-relevance N`: Minimum relevance score threshold (default: 75)
 
 ## How It Works
 
-1. The program fetches stories from the selected source (top, best, or new):
-   - Gets up to 500 pre-curated story IDs in a single API call
-   - Efficiently processes these stories asynchronously with high concurrency
-   - Applies time and score filters directly during processing
+The program operates in three distinct modes, each with its own responsibilities:
 
-2. For each story, it:
-   - Filters by timeframe (default: 24 hours) and score (default: ≥ 30)
-   - Adds new stories to the database
-   - Updates scores for existing stories
-   - Tracks the oldest ID for optimization
+### 1. Data Collection (Fetch)
 
-3. If Claude relevance scoring is enabled, the application:
-   - Sends each story title and URL to Claude AI for stories without existing scores
-   - Calculates a relevance score (0-100) indicating how well it matches your interests
-   - Stores the relevance scores in the database for future use
-   - Filters stories based on the minimum relevance threshold (default: 75)
-   - Displays relevance scores alongside other story information
+The `fetch` command is responsible for:
+- Getting story data from the Hacker News API
+- Filtering by timeframe and score
+- Saving new stories to the database
+- Updating existing stories
+- Optimizing future runs by tracking metadata
 
-4. The filtered, high-quality stories are:
-   - Sorted by score in descending order
-   - Displayed directly in the console
-   - Stored in the database for future reference
+### 2. Relevance Scoring (Score)
 
-5. The program tracks metadata to optimize future runs:
-   - Last poll time
-   - Oldest story ID processed
+The `score` command:
+- Retrieves unscored stories from the database
+- Sends each story to Claude AI for relevance evaluation
+- Calculates a relevance score (0-100) indicating how well it matches your interests
+- Stores the relevance scores in the database
+- Processes in configurable batch sizes to manage API usage
+
+### 3. Display (Show)
+
+The `show` command:
+- Queries the database for stories meeting criteria
+- Filters by both HN score and relevance score
+- Sorts results by relevance and HN score
+- Displays formatted output in the console
 
 ## Database
 
@@ -175,7 +190,7 @@ See [Database Schema](docs/db_schema.md) for more details on the database struct
 
 ## Personalized Relevance Scoring
 
-When using the `--claude` flag, the application leverages Claude AI to calculate relevance scores for stories:
+When using the scoring feature, the application leverages Claude AI to calculate relevance scores for stories:
 
 - Current interest categories:
   - Programming and software development
@@ -202,19 +217,46 @@ Each story receives a relevance score from 0-100 indicating how well it matches 
 
 **Key advantages of the relevance score system:**
 - Scores are persisted in the database, minimizing redundant API calls
-- The Anthropic API is only called for new stories without existing scores
+- The Anthropic API is only called for stories without existing scores
 - Users can adjust the relevance threshold to be more or less selective
 - Scores are displayed with each story, providing insight into the filtering system
 - Domain-based caching reduces API calls for common websites
 - Batch processing with asynchronous requests for performance
-- Background scoring option to separate API calls from main application
-- "Scored-only" mode to use the system without making any API calls
 
 The optimized relevance scoring system employs several strategies to minimize API usage:
 1. **Database Persistence**: Scores are stored in the database so they only need to be calculated once
 2. **Domain Caching**: Common domains are cached to avoid redundant scoring
 3. **Batch Processing**: Processes multiple stories concurrently for efficiency
-4. **Background Processing**: Optional separation of API calls into a background process
-5. **Flexible Modes**: Choose between inline scoring, background scoring, or scored-only modes
+4. **Separation of Concerns**: Clear separation between fetching, scoring, and displaying
 
 Claude analyzes story titles and domains to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.
+
+## Typical Workflow
+
+A typical workflow might look like this:
+
+1. **Initial Setup**:
+   ```bash
+   # Set up your API key (for relevance scoring)
+   export ANTHROPIC_API_KEY=your_api_key_here
+   ```
+
+2. **Regular Usage**:
+   ```bash
+   # 1. Fetch new stories from Hacker News
+   hn-poll fetch
+   
+   # 2. Calculate relevance scores for new stories
+   hn-poll score
+   
+   # 3. Show high-quality, relevant stories
+   hn-poll show
+   ```
+
+3. **Custom Filtering**:
+   ```bash
+   # Show stories with custom thresholds
+   hn-poll show --min-score 20 --min-relevance 60
+   ```
+
+This separation of concerns allows for more efficient API usage and clearer operation.
