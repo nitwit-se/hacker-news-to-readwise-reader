@@ -29,6 +29,17 @@
 - [x] Create README with usage instructions
 - [x] Document code with docstrings
 
+## Content Enhancement ✅
+- [x] Add URL content fetching functionality
+- [x] Implement HTML to Markdown conversion
+- [x] Update database schema to store article content
+- [x] Add content summary display to console output
+- [x] Implement error handling for content fetching
+- [x] Add retry mechanism with exponential backoff
+- [x] Implement special handling for Twitter/X URLs
+- [x] Add error tracking in database
+- [x] Prioritize content fetching for new stories
+
 ## Optional Enhancements (Future Work)
 - [ ] Add story filtering options
 - [x] Implement command-line arguments
@@ -39,5 +50,5 @@
 
 ## Project Management
 - [x] Update TODO.md with completed items
-- [ ] Create CLAUDE.md with project information
-- [ ] Initialize git repository
+- [x] Create CLAUDE.md with project information
+- [x] Initialize git repository
