@@ -14,6 +14,7 @@ A high-performance Python application that polls Hacker News for high-quality st
 - Intelligently tracks processed stories to minimize redundant fetching
 - Claude AI-powered personalized filtering based on your interests
 - Smart scoring system that combines HN score and relevance score with configurable weights
+- Comprehensive Python type hints throughout the codebase for improved maintainability
 
 ## Requirements
 
@@ -25,6 +26,7 @@ A high-performance Python application that polls Hacker News for high-quality st
   - aiohttp: Asynchronous HTTP client
   - asyncio: Asynchronous I/O library
   - anthropic: Claude AI API client (for personalized filtering)
+  - typing: Python's static type annotations
 
 ## Installation
 
@@ -192,6 +194,68 @@ See [Database Schema](docs/db_schema.md) for more details on the database struct
 - Early filtering reduces database operations and memory usage
 - Optimized for fast execution even with large numbers of stories
 - The application is designed to be run periodically (e.g., hourly or daily)
+
+## Type Hints
+
+This project uses Python's type hint system throughout the codebase:
+
+- All functions include parameter and return type annotations
+- Container types specify their element types (e.g., `List[Dict[str, Any]]`)
+- Proper handling of optional values with `Optional[T]`
+- Consistent type annotations across all modules
+
+Benefits of the type annotations:
+- Self-documenting code that clearly shows expected inputs and outputs
+- Enhanced IDE support with autocompletion and real-time error detection
+- Enables static type checking with tools like mypy
+- Improved code maintainability and refactoring confidence
+
+Contributors should maintain type hints with all new code or modifications.
+
+## Testing
+
+This project uses pytest for testing. The test suite includes:
+
+- Unit tests for individual components
+- Integration tests for component interactions
+- Fixtures for database and API mocking
+- Test coverage reporting
+
+### Running Tests
+
+```bash
+# Activate your virtual environment
+source .venv/bin/activate  # or source .venv/bin/activate.fish for fish shell
+
+# Install development dependencies if not already installed
+uv pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run tests with coverage report
+pytest --cov=src
+
+# Run specific test categories
+pytest -m unit              # Only unit tests
+pytest -m integration       # Only integration tests
+pytest -m "unit and db"     # Only database unit tests
+pytest -m "unit and api"    # Only API unit tests
+
+# Run tests verbosely
+pytest -v
+
+# Run a specific test file
+pytest tests/unit/test_api.py
+```
+
+### Test Structure
+
+- `tests/unit/`: Unit tests for individual modules
+- `tests/integration/`: Integration tests across modules
+- `tests/fixtures/`: Shared test fixtures and utilities
+
+When adding new features, please include appropriate tests to maintain code quality.
 
 ## Personalized Relevance Scoring
 

@@ -2,17 +2,18 @@ import os
 import asyncio
 import time
 from functools import lru_cache
+from typing import List, Dict, Tuple, Optional, Any, Union, cast
 from anthropic import Anthropic, AsyncAnthropic
 
 # Initialize the Anthropic clients
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 async_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-def get_relevance_score(story):
+def get_relevance_score(story: Dict[str, Any]) -> int:
     """Calculate a relevance score for how well a HN story matches user interests.
     
     Args:
-        story (dict): Story details from the Hacker News API
+        story (Dict[str, Any]): Story details from the Hacker News API
         
     Returns:
         int: Relevance score from 0-100, where higher values indicate more relevant content
@@ -97,11 +98,11 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
         return 0
 
 # Keep the old function for backward compatibility, but use the new one internally
-def is_interesting(story, threshold=75):
+def is_interesting(story: Dict[str, Any], threshold: int = 75) -> bool:
     """Classify if a HN story matches user interests using a relevance score.
     
     Args:
-        story (dict): Story details from the Hacker News API
+        story (Dict[str, Any]): Story details from the Hacker News API
         threshold (int): Minimum relevance score to be considered interesting (0-100)
         
     Returns:
@@ -120,7 +121,7 @@ def is_interesting(story, threshold=75):
     return score >= threshold
 
 @lru_cache(maxsize=128)
-def get_domain_relevance_score(domain):
+def get_domain_relevance_score(domain: str) -> int:
     """Calculate a relevance score for a domain, with caching.
     
     This function is used as an optimization for domains that
@@ -194,11 +195,11 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
     except Exception:
         return 0
 
-async def get_relevance_score_async(story):
+async def get_relevance_score_async(story: Dict[str, Any]) -> int:
     """Asynchronous version of get_relevance_score.
     
     Args:
-        story (dict): Story details from the Hacker News API
+        story (Dict[str, Any]): Story details from the Hacker News API
         
     Returns:
         int: Relevance score from 0-100
@@ -302,15 +303,15 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
         print(f"Error calculating relevance score asynchronously: {e}")
         return 0
 
-async def process_story_batch_async(stories, throttle_delay=0.2):
+async def process_story_batch_async(stories: List[Dict[str, Any]], throttle_delay: float = 0.2) -> List[Dict[str, Any]]:
     """Process a batch of stories asynchronously to get relevance scores.
     
     Args:
-        stories (list): List of story dictionaries to process
+        stories (List[Dict[str, Any]]): List of story dictionaries to process
         throttle_delay (float): Delay between API calls to avoid rate limits
         
     Returns:
-        list: List of stories with added relevance scores
+        List[Dict[str, Any]]: List of stories with added relevance scores
     """
     tasks = []
     

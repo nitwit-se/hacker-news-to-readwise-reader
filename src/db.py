@@ -1,10 +1,11 @@
 import sqlite3
 import os
 from datetime import datetime, timedelta
+from typing import List, Dict, Tuple, Optional, Any, Union, cast
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'hn_stories.db')
 
-def init_db():
+def init_db() -> None:
     """Initialize the database with required tables if they don't exist."""
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -60,8 +61,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_last_poll_time():
-    """Get the timestamp of the last successful poll."""
+def get_last_poll_time() -> Optional[str]:
+    """Get the timestamp of the last successful poll.
+    
+    Returns:
+        Optional[str]: ISO format timestamp string or None if not found
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -74,8 +79,12 @@ def get_last_poll_time():
         return result[0]
     return None
 
-def update_last_poll_time():
-    """Update the last poll time to current time."""
+def update_last_poll_time() -> str:
+    """Update the last poll time to current time.
+    
+    Returns:
+        str: The new timestamp in ISO format
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -87,8 +96,12 @@ def update_last_poll_time():
     
     return current_time
 
-def get_last_oldest_id():
-    """Get the ID of the oldest story from the last run."""
+def get_last_oldest_id() -> Optional[int]:
+    """Get the ID of the oldest story from the last run.
+    
+    Returns:
+        Optional[int]: The ID of the oldest story or None if not found
+    """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
@@ -101,8 +114,12 @@ def get_last_oldest_id():
         return int(result[0])
     return None
 
-def update_last_oldest_id(oldest_id):
-    """Update the ID of the oldest story from the current run."""
+def update_last_oldest_id(oldest_id: Optional[int]) -> None:
+    """Update the ID of the oldest story from the current run.
+    
+    Args:
+        oldest_id (Optional[int]): The ID of the oldest story processed
+    """
     if not oldest_id:
         return
         
@@ -114,11 +131,11 @@ def update_last_oldest_id(oldest_id):
     conn.commit()
     conn.close()
 
-def save_stories(stories):
+def save_stories(stories: List[Dict[str, Any]]) -> int:
     """Save new stories to the database.
     
     Args:
-        stories (list): List of story dictionaries to save
+        stories (List[Dict[str, Any]]): List of story dictionaries to save
         
     Returns:
         int: Number of new stories saved
@@ -162,11 +179,11 @@ def save_stories(stories):
     
     return new_count
 
-def update_story_scores(stories):
+def update_story_scores(stories: List[Dict[str, Any]]) -> int:
     """Update scores for existing stories.
     
     Args:
-        stories (list): List of story dictionaries to update
+        stories (List[Dict[str, Any]]): List of story dictionaries to update
         
     Returns:
         int: Number of stories updated
@@ -224,14 +241,14 @@ def update_story_scores(stories):
     
     return update_count
 
-def save_or_update_stories(stories):
+def save_or_update_stories(stories: List[Dict[str, Any]]) -> Tuple[int, int]:
     """Save new stories and update existing ones.
     
     Args:
-        stories (list): List of story dictionaries to save or update
+        stories (List[Dict[str, Any]]): List of story dictionaries to save or update
         
     Returns:
-        tuple: (new_count, update_count) - Number of new and updated stories
+        Tuple[int, int]: (new_count, update_count) - Number of new and updated stories
     """
     if not stories:
         return 0, 0
@@ -307,17 +324,17 @@ def save_or_update_stories(stories):
     
     return new_count, update_count
 
-def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None, only_unscored=False):
+def get_stories_within_timeframe(hours: int = 24, min_score: int = 0, min_relevance: Optional[int] = None, only_unscored: bool = False) -> List[Dict[str, Any]]:
     """Get all stories within the specified timeframe with filtering options.
     
     Args:
         hours (int): Number of hours to look back
         min_score (int): Minimum HN score threshold
-        min_relevance (int, optional): Minimum relevance score threshold
+        min_relevance (Optional[int]): Minimum relevance score threshold
         only_unscored (bool): If True, only return stories without a relevance score
         
     Returns:
-        list: List of story dictionaries
+        List[Dict[str, Any]]: List of story dictionaries
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -358,7 +375,7 @@ def get_stories_within_timeframe(hours=24, min_score=0, min_relevance=None, only
     
     return stories
 
-def get_high_quality_stories(hours=24, min_hn_score=30, min_relevance=75):
+def get_high_quality_stories(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75) -> List[Dict[str, Any]]:
     """Get high-quality stories meeting both HN score and relevance thresholds.
     
     Args:
@@ -367,7 +384,7 @@ def get_high_quality_stories(hours=24, min_hn_score=30, min_relevance=75):
         min_relevance (int): Minimum relevance score threshold
         
     Returns:
-        list: List of story dictionaries meeting the criteria
+        List[Dict[str, Any]]: List of story dictionaries meeting the criteria
     """
     # Simply use our optimized get_stories_within_timeframe function
     return get_stories_within_timeframe(
@@ -376,15 +393,15 @@ def get_high_quality_stories(hours=24, min_hn_score=30, min_relevance=75):
         min_relevance=min_relevance
     )
 
-def get_unscored_stories(hours=None, min_score=0):
+def get_unscored_stories(hours: Optional[int] = None, min_score: int = 0) -> List[Dict[str, Any]]:
     """Get stories without relevance scores.
     
     Args:
-        hours (int, optional): Number of hours to look back. If None, gets all unscored stories.
+        hours (Optional[int]): Number of hours to look back. If None, gets all unscored stories.
         min_score (int): Minimum HN score threshold
         
     Returns:
-        list: List of story dictionaries without relevance scores
+        List[Dict[str, Any]]: List of story dictionaries without relevance scores
     """
     if hours is not None:
         # Get stories from the specified time period
@@ -397,22 +414,22 @@ def get_unscored_stories(hours=None, min_score=0):
         # Get all unscored stories without time constraint
         return get_all_unscored_stories(min_score=min_score)
 
-def get_unscored_stories_in_batches(hours=None, min_score=0, batch_size=10):
+def get_unscored_stories_in_batches(hours: Optional[int] = None, min_score: int = 0, batch_size: int = 10) -> List[List[Dict[str, Any]]]:
     """Get unscored stories in batches for efficient processing.
     
     Args:
-        hours (int, optional): Number of hours to look back. If None, gets all unscored stories.
+        hours (Optional[int]): Number of hours to look back. If None, gets all unscored stories.
         min_score (int): Minimum score threshold
         batch_size (int): Number of stories to retrieve in each batch
         
     Returns:
-        list: List of batches of story dictionaries
+        List[List[Dict[str, Any]]]: List of batches of story dictionaries
     """
     # Get all unscored stories
     all_stories = get_unscored_stories(hours=hours, min_score=min_score)
     
     # Split into batches
-    batches = []
+    batches: List[List[Dict[str, Any]]] = []
     for i in range(0, len(all_stories), batch_size):
         batch = all_stories[i:i + batch_size]
         if batch:  # Only add non-empty batches
@@ -420,14 +437,14 @@ def get_unscored_stories_in_batches(hours=None, min_score=0, batch_size=10):
     
     return batches
 
-def get_all_unscored_stories(min_score=0):
+def get_all_unscored_stories(min_score: int = 0) -> List[Dict[str, Any]]:
     """Get all unscored stories regardless of age.
     
     Args:
         min_score (int): Minimum score threshold
         
     Returns:
-        list: List of story dictionaries
+        List[Dict[str, Any]]: List of story dictionaries
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -457,14 +474,14 @@ def get_all_unscored_stories(min_score=0):
     
     return stories
 
-def get_story_ids_since(timestamp_str=None):
+def get_story_ids_since(timestamp_str: Optional[str] = None) -> List[int]:
     """Get IDs of stories added since the specified timestamp.
     
     Args:
-        timestamp_str (str): ISO format timestamp string
+        timestamp_str (Optional[str]): ISO format timestamp string
         
     Returns:
-        list: List of story IDs
+        List[int]: List of story IDs
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
@@ -480,14 +497,14 @@ def get_story_ids_since(timestamp_str=None):
     
     return story_ids
 
-def get_story_with_content(story_id):
+def get_story_with_content(story_id: int) -> Optional[Dict[str, Any]]:
     """Get full story details.
     
     Args:
         story_id (int): The ID of the story to retrieve
         
     Returns:
-        dict: Story details or None if not found
+        Optional[Dict[str, Any]]: Story details or None if not found
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -507,11 +524,11 @@ def get_story_with_content(story_id):
     
     return story
 
-def get_relevance_score_stats():
+def get_relevance_score_stats() -> Dict[str, Union[int, float]]:
     """Get statistics about relevance scores in the database.
     
     Returns:
-        dict: Statistics about relevance scores
+        Dict[str, Union[int, float]]: Statistics about relevance scores
     """
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()

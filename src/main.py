@@ -7,6 +7,7 @@ import asyncio
 import time
 import math
 from datetime import datetime
+from typing import List, Dict, Tuple, Optional, Any, Union, cast
 
 # Add the parent directory to the path so we can import our modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -20,14 +21,14 @@ from src.api import get_filtered_stories_async
 from src.classifier import is_interesting, get_relevance_score
 from src.classifier import process_story_batch_async, get_relevance_score_async
 
-def calculate_combined_score(story, hn_weight=0.7):
+def calculate_combined_score(story: Dict[str, Any], hn_weight: float = 0.7) -> float:
     """Calculate a combined score using both HN score and relevance score.
     
     Uses logarithmic scaling for HN score to reduce the impact of extremely high scores,
     then combines it with the relevance score using a weighted average.
     
     Args:
-        story (dict): Story details including 'score' and optionally 'relevance_score'
+        story (Dict[str, Any]): Story details including 'score' and optionally 'relevance_score'
         hn_weight (float): Weight to apply to the normalized HN score (0.0-1.0)
         
     Returns:
@@ -49,11 +50,11 @@ def calculate_combined_score(story, hn_weight=0.7):
     relevance_weight = 1 - hn_weight
     return (hn_weight * normalized_hn) + (relevance_weight * relevance_score)
 
-def format_story(story):
+def format_story(story: Dict[str, Any]) -> str:
     """Format a story for console output.
     
     Args:
-        story (dict): Story details
+        story (Dict[str, Any]): Story details
         
     Returns:
         str: Formatted story string
@@ -88,7 +89,7 @@ def format_story(story):
     
     return output
 
-async def fetch_stories_async(hours=24, min_score=30, source='top', limit=500):
+async def fetch_stories_async(hours: int = 24, min_score: int = 30, source: str = 'top', limit: int = 500) -> Tuple[int, int]:
     """Fetch stories from Hacker News and save to the database.
     
     Args:
@@ -98,7 +99,7 @@ async def fetch_stories_async(hours=24, min_score=30, source='top', limit=500):
         limit (int): Maximum number of stories to fetch from source
         
     Returns:
-        tuple: (new_count, update_count) - Number of new and updated stories
+        Tuple[int, int]: (new_count, update_count) - Number of new and updated stories
     """
     # Initialize database if not exists
     init_db()
@@ -136,7 +137,7 @@ async def fetch_stories_async(hours=24, min_score=30, source='top', limit=500):
     
     return new_count, update_count
 
-async def score_stories_async(hours=24, min_score=30, batch_size=10):
+async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: int = 10) -> int:
     """Calculate relevance scores for unscored stories.
     
     Args:
@@ -182,7 +183,7 @@ async def score_stories_async(hours=24, min_score=30, batch_size=10):
     print(f"\nCalculated relevance scores for {scored_count} stories and updated database.")
     return scored_count
 
-def show_stories(hours=24, min_hn_score=30, min_relevance=75, hn_weight=0.7):
+def show_stories(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75, hn_weight: float = 0.7) -> int:
     """Display stories meeting criteria from the database.
     
     Args:
@@ -238,7 +239,7 @@ def show_stories(hours=24, min_hn_score=30, min_relevance=75, hn_weight=0.7):
     
     return len(relevant_stories)
 
-def cmd_fetch(args):
+def cmd_fetch(args: argparse.Namespace) -> int:
     """Handle the 'fetch' subcommand."""
     print(f"Fetching stories from Hacker News {args.source}...")
     new_count, update_count = asyncio.run(fetch_stories_async(
@@ -250,7 +251,7 @@ def cmd_fetch(args):
     print(f"Done! Added {new_count} new stories and updated {update_count} existing stories.")
     return 0
 
-def cmd_score(args):
+def cmd_score(args: argparse.Namespace) -> int:
     """Handle the 'score' subcommand."""
     print("Calculating relevance scores for unscored stories...")
     scored_count = asyncio.run(score_stories_async(
@@ -261,7 +262,7 @@ def cmd_score(args):
     print(f"Done! Calculated relevance scores for {scored_count} stories.")
     return 0
 
-def cmd_show(args):
+def cmd_show(args: argparse.Namespace) -> int:
     """Handle the 'show' subcommand."""
     show_stories(
         hours=args.hours,
@@ -271,8 +272,12 @@ def cmd_show(args):
     )
     return 0
 
-def main():
-    """Main entry point for the program."""
+def main() -> int:
+    """Main entry point for the program.
+    
+    Returns:
+        int: Exit code (0 for success, non-zero for error)
+    """
     # Create the top-level parser
     parser = argparse.ArgumentParser(
         description='Hacker News story poller and relevance filter',

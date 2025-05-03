@@ -3,18 +3,19 @@ import time
 import asyncio
 import aiohttp
 from datetime import datetime, timedelta
+from typing import List, Dict, Tuple, Optional, Any, Union, cast
 
 # Hacker News API base URL
 API_BASE_URL = 'https://hacker-news.firebaseio.com/v0/'
 
-def get_best_stories(limit=500):
+def get_best_stories(limit: int = 500) -> List[int]:
     """Get IDs of best stories.
     
     Args:
         limit (int): Maximum number of stories to fetch
         
     Returns:
-        list: List of story IDs
+        List[int]: List of story IDs
     """
     url = f"{API_BASE_URL}beststories.json"
     response = requests.get(url)
@@ -23,14 +24,14 @@ def get_best_stories(limit=500):
     # Return only the requested number of stories
     return response.json()[:limit]
 
-def get_top_stories(limit=500):
+def get_top_stories(limit: int = 500) -> List[int]:
     """Get IDs of current top stories.
     
     Args:
         limit (int): Maximum number of stories to fetch
         
     Returns:
-        list: List of story IDs
+        List[int]: List of story IDs
     """
     url = f"{API_BASE_URL}topstories.json"
     response = requests.get(url)
@@ -39,14 +40,14 @@ def get_top_stories(limit=500):
     # Return only the requested number of stories
     return response.json()[:limit]
 
-def get_new_stories(limit=500):
+def get_new_stories(limit: int = 500) -> List[int]:
     """Get IDs of newest stories.
     
     Args:
         limit (int): Maximum number of stories to fetch
         
     Returns:
-        list: List of story IDs
+        List[int]: List of story IDs
     """
     url = f"{API_BASE_URL}newstories.json"
     response = requests.get(url)
@@ -55,14 +56,14 @@ def get_new_stories(limit=500):
     # Return only the requested number of stories
     return response.json()[:limit]
 
-def get_story(story_id):
+def get_story(story_id: int) -> Optional[Dict[str, Any]]:
     """Get details for a specific story by ID.
     
     Args:
         story_id (int): The story ID to fetch
         
     Returns:
-        dict: Story details or None if not found
+        Optional[Dict[str, Any]]: Story details or None if not found
     """
     url = f"{API_BASE_URL}item/{story_id}.json"
     response = requests.get(url)
@@ -73,17 +74,17 @@ def get_story(story_id):
     response.raise_for_status()
     return response.json()
 
-def get_stories_details(story_ids, delay=0.05):
+def get_stories_details(story_ids: List[int], delay: float = 0.05) -> List[Dict[str, Any]]:
     """Get details for multiple stories.
     
     Args:
-        story_ids (list): List of story IDs to fetch
+        story_ids (List[int]): List of story IDs to fetch
         delay (float): Delay between requests to avoid rate limiting
         
     Returns:
-        list: List of story detail dictionaries
+        List[Dict[str, Any]]: List of story detail dictionaries
     """
-    stories = []
+    stories: List[Dict[str, Any]] = []
     
     for story_id in story_ids:
         story = get_story(story_id)
@@ -95,7 +96,7 @@ def get_stories_details(story_ids, delay=0.05):
     
     return stories
 
-def get_stories_batch(start_index=0, batch_size=100):
+def get_stories_batch(start_index: int = 0, batch_size: int = 100) -> List[int]:
     """Get a batch of newest stories from the specified starting index.
     
     Args:
@@ -103,7 +104,7 @@ def get_stories_batch(start_index=0, batch_size=100):
         batch_size (int): Number of stories to fetch in this batch
         
     Returns:
-        list: List of story IDs in this batch
+        List[int]: List of story IDs in this batch
     """
     all_new_story_ids = get_new_stories(500)  # Get a large enough list to handle batching
     
@@ -114,11 +115,11 @@ def get_stories_batch(start_index=0, batch_size=100):
     end_index = min(start_index + batch_size, len(all_new_story_ids))
     return all_new_story_ids[start_index:end_index]
 
-def is_story_within_timeframe(story, hours=24):
+def is_story_within_timeframe(story: Optional[Dict[str, Any]], hours: int = 24) -> bool:
     """Check if a story is within the specified timeframe.
     
     Args:
-        story (dict): Story details dictionary
+        story (Optional[Dict[str, Any]]): Story details dictionary
         hours (int): Number of hours to look back
         
     Returns:
@@ -136,7 +137,7 @@ def is_story_within_timeframe(story, hours=24):
     
     return story_time >= cutoff_time
 
-async def get_story_async(session, story_id):
+async def get_story_async(session: aiohttp.ClientSession, story_id: int) -> Optional[Dict[str, Any]]:
     """Get details for a specific story by ID asynchronously.
     
     Args:
@@ -144,7 +145,7 @@ async def get_story_async(session, story_id):
         story_id (int): The story ID to fetch
         
     Returns:
-        dict: Story details or None if not found
+        Optional[Dict[str, Any]]: Story details or None if not found
     """
     url = f"{API_BASE_URL}item/{story_id}.json"
     
@@ -158,21 +159,21 @@ async def get_story_async(session, story_id):
     except Exception:
         return None
 
-async def get_stories_details_async(story_ids, concurrency=10):
+async def get_stories_details_async(story_ids: List[int], concurrency: int = 10) -> List[Dict[str, Any]]:
     """Get details for multiple stories asynchronously.
     
     Args:
-        story_ids (list): List of story IDs to fetch
+        story_ids (List[int]): List of story IDs to fetch
         concurrency (int): Maximum number of concurrent requests
         
     Returns:
-        list: List of story detail dictionaries
+        List[Dict[str, Any]]: List of story detail dictionaries
     """
-    stories = []
+    stories: List[Dict[str, Any]] = []
     semaphore = asyncio.Semaphore(concurrency)
     
     async with aiohttp.ClientSession() as session:
-        async def fetch_with_semaphore(story_id):
+        async def fetch_with_semaphore(story_id: int) -> Optional[Dict[str, Any]]:
             async with semaphore:
                 story = await get_story_async(session, story_id)
                 if story and story.get('type') == 'story':
@@ -187,7 +188,7 @@ async def get_stories_details_async(story_ids, concurrency=10):
     
     return stories
 
-def get_max_item_id():
+def get_max_item_id() -> int:
     """Get the current maximum item ID from Hacker News.
     
     Returns:
@@ -198,7 +199,7 @@ def get_max_item_id():
     response.raise_for_status()
     return response.json()
 
-def get_stories_from_maxitem(hours=24, batch_size=100, max_batches=10, consecutive_old_threshold=5):
+def get_stories_from_maxitem(hours: int = 24, batch_size: int = 100, max_batches: int = 10, consecutive_old_threshold: int = 5) -> Tuple[List[Dict[str, Any]], Optional[int]]:
     """Get all recent stories by working backwards from the maximum item ID.
     
     This function fetches stories in batches, starting from the most recent item
@@ -212,10 +213,10 @@ def get_stories_from_maxitem(hours=24, batch_size=100, max_batches=10, consecuti
         consecutive_old_threshold (int): Number of consecutive old items to find before stopping
         
     Returns:
-        tuple: (all_stories, oldest_id) - List of stories within timeframe and oldest ID processed
+        Tuple[List[Dict[str, Any]], Optional[int]]: (all_stories, oldest_id) - List of stories within timeframe and oldest ID processed
     """
-    all_stories = []
-    oldest_id = None
+    all_stories: List[Dict[str, Any]] = []
+    oldest_id: Optional[int] = None
     consecutive_old_count = 0
     
     # Get the current maximum item ID
@@ -266,7 +267,7 @@ def get_stories_from_maxitem(hours=24, batch_size=100, max_batches=10, consecuti
     
     return all_stories, oldest_id
 
-def get_stories_until_cutoff(last_oldest_id=None, hours=24, batch_size=100, max_batches=10):
+def get_stories_until_cutoff(last_oldest_id: Optional[int] = None, hours: int = 24, batch_size: int = 100, max_batches: int = 10) -> Tuple[List[Dict[str, Any]], Optional[int]]:
     """Get all new stories until reaching the 24-hour cutoff or last known ID.
     
     This function fetches stories in batches until it either:
@@ -275,16 +276,16 @@ def get_stories_until_cutoff(last_oldest_id=None, hours=24, batch_size=100, max_
     3. Processes the maximum number of allowed batches
     
     Args:
-        last_oldest_id (int): The ID of the oldest story from the previous run
+        last_oldest_id (Optional[int]): The ID of the oldest story from the previous run
         hours (int): Number of hours to look back
         batch_size (int): Size of each batch of stories to process
         max_batches (int): Maximum number of batches to process
         
     Returns:
-        tuple: (all_stories, oldest_id) - List of stories within timeframe and oldest ID processed
+        Tuple[List[Dict[str, Any]], Optional[int]]: (all_stories, oldest_id) - List of stories within timeframe and oldest ID processed
     """
-    all_stories = []
-    oldest_id = None
+    all_stories: List[Dict[str, Any]] = []
+    oldest_id: Optional[int] = None
     reached_cutoff = False
     
     # Get all new story IDs
@@ -338,7 +339,7 @@ def get_stories_until_cutoff(last_oldest_id=None, hours=24, batch_size=100, max_
     return all_stories, oldest_id
 
 
-async def get_filtered_stories_async(source='top', hours=24, min_score=10, limit=500):
+async def get_filtered_stories_async(source: str = 'top', hours: int = 24, min_score: int = 10, limit: int = 500) -> Tuple[List[Dict[str, Any]], Optional[int]]:
     """Get high-quality stories efficiently using the specified source.
     
     This optimized function:
@@ -353,7 +354,7 @@ async def get_filtered_stories_async(source='top', hours=24, min_score=10, limit
         limit (int): Maximum number of stories to process
         
     Returns:
-        tuple: (stories, oldest_id) - List of filtered stories and oldest ID processed
+        Tuple[List[Dict[str, Any]], Optional[int]]: (stories, oldest_id) - List of filtered stories and oldest ID processed
     """
     # Get story IDs from the selected source
     if source == 'top':
@@ -367,8 +368,8 @@ async def get_filtered_stories_async(source='top', hours=24, min_score=10, limit
     all_stories = await get_stories_details_async(story_ids)
     
     # Filter by time and score
-    filtered_stories = []
-    oldest_id = None
+    filtered_stories: List[Dict[str, Any]] = []
+    oldest_id: Optional[int] = None
     
     for story in all_stories:
         # Track oldest ID for future reference
