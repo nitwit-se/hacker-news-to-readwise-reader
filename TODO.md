@@ -61,7 +61,7 @@
 - [ ] Create simple web dashboard
 - [ ] Add export functionality
 - [ ] Add colorful console output
-- [ ] Implement full test suite
+- [x] Implement full test suite with pytest
 - [ ] Add user configuration file
 - [ ] Add more advanced filtering (by type, domain, keywords)
 - [ ] Add ability to customize interest categories via config file

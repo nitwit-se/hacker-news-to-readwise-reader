@@ -6,7 +6,7 @@ This project is a high-performance Python application that polls the Hacker News
 
 ## Technologies Used
 
-- **Python 3.12**: Core programming language
+- **Python 3.12**: Core programming language with type hints
 - **uv**: Modern Python package manager for dependency management
 - **requests**: For making HTTP requests to the Hacker News API
 - **sqlite3**: Python's built-in SQLite database interface
@@ -14,6 +14,8 @@ This project is a high-performance Python application that polls the Hacker News
 - **aiohttp**: For asynchronous HTTP requests
 - **asyncio**: For asynchronous programming
 - **anthropic**: Python client for the Anthropic Claude API
+- **typing**: For static type annotations throughout the codebase
+- **pytest**: For comprehensive unit and integration testing
 
 ## Project Structure
 
@@ -22,9 +24,14 @@ This project is a high-performance Python application that polls the Hacker News
   - `db.py`: Database operations (initialization, queries, updates, score tracking)
   - `main.py`: Main program logic and command-line interface
   - `classifier.py`: Claude AI integration for interest-based filtering
+- `tests/`: Test suite
+  - `unit/`: Unit tests for individual modules
+  - `integration/`: Integration tests for component interaction
+  - `fixtures/`: Shared test fixtures and utilities
 - `docs/`: Documentation files
   - `db_schema.md`: Database schema details
 - `pyproject.toml`: Project configuration and dependencies
+- `pytest.ini`: Configuration for the pytest testing framework
 - `setup.sh`: Shell script to set up the development environment
 - `README.md`: User documentation
 - `TODO.md`: Development task tracking
@@ -60,6 +67,29 @@ hn-poll --claude
 
 # Or run directly
 python src/main.py
+```
+
+### Testing
+```bash
+# Install development dependencies
+uv pip install -e ".[dev]"
+
+# Run all tests
+pytest
+
+# Run tests with coverage report
+pytest --cov=src
+
+# Run specific test categories
+pytest -m unit              # Only unit tests
+pytest -m integration       # Only integration tests
+pytest -m "unit and db"     # Only database unit tests
+
+# Run tests verbosely
+pytest -v
+
+# Run a specific test file
+pytest tests/unit/test_api.py
 ```
 
 ## How It Works
@@ -119,6 +149,31 @@ uv pip install new-package-name
 
 NEVER use pip directly in this project as it would bypass uv's dependency resolution.
 
+### Type Hints Policy
+
+All code in this project uses Python type hints to improve code quality and maintainability:
+
+- **Required for all functions**: Every function must include parameter and return type annotations
+- **Type consistency**: Use consistent type annotations across the codebase 
+- **Common types used**:
+  - `List[T]`, `Dict[K, V]`, `Tuple[T, ...]` for container types
+  - `Optional[T]` for values that might be None
+  - `Union[T1, T2, ...]` for values that could be multiple types
+  - `Any` only when absolutely necessary
+
+- **Benefits**:
+  - Enhanced code readability and self-documentation
+  - Better IDE support for autocompletion and error detection
+  - Catches potential type-related issues early
+  - Facilitates static analysis tools like mypy
+
+- **Style guidance**:
+  - Always add return type annotations, including `-> None` for functions with no return value
+  - Specify collection types with their element types (e.g., `List[Dict[str, Any]]`, not just `list`)
+  - Use descriptive type aliases for complex types when appropriate
+
+All new code contributions must include proper type annotations following these guidelines.
+
 ## Performance Considerations
 
 - Direct fetching of pre-filtered story lists (top/best) for optimal performance
@@ -138,7 +193,7 @@ Potential improvements to consider:
 - Add export functionality to different formats (JSON, CSV)
 - Implement more advanced filtering options (by type, domain, keywords)
 - Add user configuration file for persistent settings
-- Add a full test suite with pytest
+- Improve test coverage and add more edge case tests
 - Improve Claude AI integration with response caching
 - Add ability to customize interest categories via configuration file
 - Create visualization of story score trends over time
