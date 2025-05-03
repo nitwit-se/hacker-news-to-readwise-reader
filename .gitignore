@@ -47,3 +47,4 @@ venv.bak/
 Thumbs.db
 
 **/.claude/settings.local.json
+.coverage
