@@ -355,8 +355,9 @@ def test_cmd_fetch(monkeypatch):
         source = 'top'
         limit = 10
     
-    # Mock fetch_stories_async to avoid actual API calls
+    # Mock asyncio.run to directly return a predefined result without using the coroutine
     mock_fetch = MagicMock(return_value=(5, 2))
+    monkeypatch.setattr('src.main.fetch_stories_async', lambda *args, **kwargs: None)  # Placeholder
     monkeypatch.setattr('asyncio.run', lambda x: mock_fetch())
     
     # Mock print to avoid console output
@@ -380,6 +381,7 @@ def test_cmd_score(monkeypatch):
     
     # Mock score_stories_async to avoid actual scoring
     mock_score = MagicMock(return_value=7)
+    monkeypatch.setattr('src.main.score_stories_async', lambda *args, **kwargs: None)  # Placeholder
     monkeypatch.setattr('asyncio.run', lambda x: mock_score())
     
     # Mock print to avoid console output
