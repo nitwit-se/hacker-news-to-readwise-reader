@@ -42,31 +42,22 @@ This project is a high-performance Python application that polls the Hacker News
 ```bash
 # Create environment and install dependencies
 ./setup.sh
-
-# For bash/zsh shells
-source .venv/bin/activate
-
-# For fish shell
-source .venv/bin/activate.fish
 ```
 
 ### Run
 ```bash
-# Run via installed command
-hn-poll
+# Run the application
+uv run python src/main.py
 
 # Run with custom settings
-hn-poll --hours 48 --min-score 5 --source best
+uv run python -m src.main --hours 48 --min-score 5 --source best
 
 # Available sources: top, best, new
-hn-poll --source best
+uv run python -m src.main --source best
 
 # Use Claude AI for interest-based filtering
 export ANTHROPIC_API_KEY=your_api_key_here
-hn-poll --claude
-
-# Or run directly
-python src/main.py
+uv run python -m src.main --claude
 ```
 
 ### Testing
@@ -75,21 +66,21 @@ python src/main.py
 uv pip install -e ".[dev]"
 
 # Run all tests
-pytest
+uv run pytest
 
 # Run tests with coverage report
-pytest --cov=src
+uv run pytest --cov=src
 
 # Run specific test categories
-pytest -m unit              # Only unit tests
-pytest -m integration       # Only integration tests
-pytest -m "unit and db"     # Only database unit tests
+uv run pytest -m unit              # Only unit tests
+uv run pytest -m integration       # Only integration tests
+uv run pytest -m "unit and db"     # Only database unit tests
 
 # Run tests verbosely
-pytest -v
+uv run pytest -v
 
 # Run a specific test file
-pytest tests/unit/test_api.py
+uv run pytest tests/unit/test_api.py
 ```
 
 ## How It Works
