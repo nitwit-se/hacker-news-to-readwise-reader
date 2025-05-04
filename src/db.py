@@ -694,8 +694,8 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
         query_parts.append('AND relevance_score >= ?')
         params.append(min_relevance)
     
-    # Add URL check - only stories with URLs
-    query_parts.append('AND url IS NOT NULL AND url != ""')
+    # Remove the URL check to allow all stories (we'll handle missing URLs in the sync code)
+    # query_parts.append('AND url IS NOT NULL AND url != ""')
     
     # Add ordering - prefer recently updated stories
     query_parts.append('ORDER BY last_updated DESC')
@@ -789,3 +789,42 @@ def get_readwise_sync_stats() -> Dict[str, Union[int, float]]:
         'unsynced_stories': unsynced_stories,
         'last_sync_time': last_sync_time
     }
+
+def delete_story_by_id(story_id: int) -> bool:
+    """Delete a story from the database by ID.
+    
+    Args:
+        story_id (int): The ID of the story to delete
+        
+    Returns:
+        bool: True if story was deleted, False otherwise
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('DELETE FROM stories WHERE id = ?', (story_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+        return deleted
+    except sqlite3.Error:
+        return False
+    finally:
+        conn.close()
+
+def get_all_story_ids() -> List[int]:
+    """Get all story IDs in the database.
+    
+    Returns:
+        List[int]: List of all story IDs
+    """
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    try:
+        cursor.execute('SELECT id FROM stories')
+        return [row[0] for row in cursor.fetchall()]
+    except sqlite3.Error:
+        return []
+    finally:
+        conn.close()

@@ -58,6 +58,10 @@
 - [x] Add asynchronous batch processing for relevance scoring
 - [x] Create background worker script for independent story scoring
 - [x] Add flexible scoring modes (scored-only, background-score)
+- [x] Create shell script for automatic workflow (fetch, score, sync)
+- [x] Fix URL handling for text posts and Ask HN posts
+- [x] Add database validation to verify stories exist before syncing
+- [x] Add database cleanup tool to remove non-existent stories
 - [ ] Create simple web dashboard
 - [ ] Add export functionality
 - [ ] Add colorful console output

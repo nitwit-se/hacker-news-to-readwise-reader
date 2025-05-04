@@ -213,10 +213,15 @@ def add_to_readwise(
         
         raise ReadwiseError(f"Failed to add URL to Readwise: {str(e)}")
 
+# Import get_story function at the module level to avoid circular imports
+# This is imported here rather than at the top to avoid circular imports
+from src.api import get_story
+
 def batch_add_to_readwise(
     stories: List[Dict[str, Any]], 
     source: str = "hn-poll",
-    existing_urls: Optional[set] = None
+    existing_urls: Optional[set] = None,
+    verify_story_exists: bool = True
 ) -> Tuple[List[int], List[Tuple[int, str]]]:
     """
     Add multiple stories to Readwise Reader, checking for existence first.
@@ -226,6 +231,7 @@ def batch_add_to_readwise(
         source: Source tag for the URLs
         existing_urls: Optional set of URLs already in Readwise Reader
             If provided, checks against this set; otherwise fetches from API
+        verify_story_exists: Verify that each story actually exists on HN before syncing
         
     Returns:
         Tuple of (successfully_added_ids, failed_ids_with_errors)
@@ -239,13 +245,41 @@ def batch_add_to_readwise(
     
     for story in stories:
         story_id = story.get("id")
-        url = story.get("url")
-        title = story.get("title")
+        url = story.get("url", "")
+        title = story.get("title", "")
         
-        if not url or not title:
-            failed_ids.append((story_id, "Missing URL or title"))
+        # Ensure we have a valid story ID
+        if not story_id:
+            failed_ids.append((0, "Missing story ID"))
             continue
+        
+        # Verify the story actually exists on Hacker News
+        if verify_story_exists:
+            # Use the HN API to check if the story exists
+            hn_story = get_story(story_id)
+            if not hn_story:
+                error_msg = "Story does not exist on Hacker News"
+                print(f"Error adding story (ID: {story_id}): {error_msg}")
+                failed_ids.append((story_id, error_msg))
+                continue
             
+            # If we successfully found the story, update our local copy with its details
+            if not url or url.strip() == "":
+                url = hn_story.get("url", "")
+            if not title or title.strip() == "":
+                title = hn_story.get("title", "")
+        
+        # Generate a fallback URL for Ask HN posts or text posts that don't have URLs
+        if not url or url.strip() == "":
+            url = f"https://news.ycombinator.com/item?id={story_id}"
+            print(f"Using HN fallback URL for story ID {story_id}")
+        
+        # Ensure we have a title
+        if not title or title.strip() == "":
+            # Try to generate a basic title if missing
+            title = f"Hacker News story {story_id}"
+            print(f"Using fallback title for story ID {story_id}")
+        
         try:
             # Check if URL already exists using our pre-fetched set
             if url in existing_urls:
@@ -265,8 +299,15 @@ def batch_add_to_readwise(
             time.sleep(1)  # Increased to be more conservative
             
         except ReadwiseError as e:
-            print(f"Error adding story (ID: {story_id}): {e}")
-            failed_ids.append((story_id, str(e)))
+            error_msg = str(e)
+            print(f"Error adding story (ID: {story_id}): {error_msg}")
+            failed_ids.append((story_id, error_msg))
+            # Wait longer after an error to avoid cascading failures
+            time.sleep(2)
+        except Exception as e:
+            error_msg = f"Unexpected error: {str(e)}"
+            print(f"Error adding story (ID: {story_id}): {error_msg}")
+            failed_ids.append((story_id, error_msg))
             # Wait longer after an error to avoid cascading failures
             time.sleep(2)
             

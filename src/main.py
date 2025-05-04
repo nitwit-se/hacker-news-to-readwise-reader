@@ -17,9 +17,9 @@ from src.db import get_last_oldest_id, update_last_oldest_id
 from src.db import save_or_update_stories, get_stories_within_timeframe, update_story_scores
 from src.db import get_unscored_stories_in_batches
 from src.db import get_unsynced_stories, mark_stories_as_synced, update_last_readwise_sync_time
-from src.db import get_readwise_sync_stats
+from src.db import get_readwise_sync_stats, delete_story_by_id, get_all_story_ids
 from src.api import get_stories_until_cutoff, get_stories_details_async, get_stories_from_maxitem
-from src.api import get_filtered_stories_async
+from src.api import get_filtered_stories_async, get_story
 from src.classifier import is_interesting, get_relevance_score
 from src.classifier import process_story_batch_async, get_relevance_score_async
 from src.readwise import batch_add_to_readwise, ReadwiseError, get_all_readwise_urls
@@ -359,8 +359,12 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
         print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} stories)...")
         
         try:
-            # Add the batch to Readwise, using our pre-fetched URL set
-            added_ids, batch_failed_ids = batch_add_to_readwise(batch, existing_urls=existing_urls)
+            # Add the batch to Readwise, using our pre-fetched URL set and verifying each story exists
+            added_ids, batch_failed_ids = batch_add_to_readwise(
+                batch, 
+                existing_urls=existing_urls,
+                verify_story_exists=True
+            )
             
             # Update database for successfully synced stories
             if added_ids:
@@ -473,6 +477,84 @@ def cmd_sync(args: argparse.Namespace) -> int:
         
     return 0
 
+def clean_non_existent_stories(batch_size: int = 100, max_batches: int = 10) -> int:
+    """Clean the database of stories that no longer exist on Hacker News.
+    
+    This function checks each story in the database against the Hacker News API
+    and removes any stories that no longer exist, helping to keep the database clean.
+    
+    Args:
+        batch_size (int): Number of stories to process in each batch
+        max_batches (int): Maximum number of batches to process
+        
+    Returns:
+        int: Number of stories removed
+    """
+    # Initialize database if not exists
+    init_db()
+    
+    # Get all story IDs from the database
+    all_story_ids = get_all_story_ids()
+    
+    if not all_story_ids:
+        print("No stories found in the database.")
+        return 0
+    
+    print(f"Found {len(all_story_ids)} stories in the database. Checking for non-existent stories...")
+    
+    # Process in batches to avoid overwhelming the API
+    removed_count = 0
+    total_processed = 0
+    total_batches = min(max_batches, (len(all_story_ids) + batch_size - 1) // batch_size)
+    
+    for i in range(0, min(len(all_story_ids), batch_size * max_batches), batch_size):
+        batch = all_story_ids[i:i + batch_size]
+        batch_num = i // batch_size + 1
+        print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} stories)...")
+        
+        for story_id in batch:
+            # Check if story exists in Hacker News
+            story = get_story(story_id)
+            
+            if not story:
+                # Story doesn't exist, remove it from the database
+                deleted = delete_story_by_id(story_id)
+                if deleted:
+                    print(f"Removed non-existent story ID: {story_id}")
+                    removed_count += 1
+            
+            total_processed += 1
+            
+            # Add a small delay to avoid hammering the API
+            time.sleep(0.1)
+        
+        # After each batch, print progress
+        print(f"Processed {total_processed}/{len(all_story_ids)} stories. Removed {removed_count} so far.")
+        
+        # Short pause between batches
+        if batch_num < total_batches:
+            print("Pausing briefly before next batch...")
+            time.sleep(1)
+    
+    print(f"\nDone! Removed {removed_count} non-existent stories from the database.")
+    return removed_count
+
+def cmd_clean(args: argparse.Namespace) -> int:
+    """Handle the 'clean' subcommand."""
+    print("Cleaning the database of non-existent stories...")
+    
+    removed_count = clean_non_existent_stories(
+        batch_size=args.batch_size,
+        max_batches=args.max_batches
+    )
+    
+    if removed_count > 0:
+        print(f"Done! Removed {removed_count} non-existent stories from the database.")
+    else:
+        print("No stories were removed from the database. All stories exist on Hacker News.")
+        
+    return 0
+
 def main() -> int:
     """Main entry point for the program.
     
@@ -536,6 +618,15 @@ def main() -> int:
     sync_parser.add_argument('--no-relevance-filter', action='store_true',
                          help='Disable relevance filtering (by default, only stories with relevance scores >= min-relevance are synced)')
     sync_parser.set_defaults(func=cmd_sync)
+    
+    # 'clean' command
+    clean_parser = subparsers.add_parser('clean',
+                                    help='Clean the database of non-existent stories')
+    clean_parser.add_argument('--batch-size', type=int, default=100,
+                         help='Number of stories to process in each batch (default: 100)')
+    clean_parser.add_argument('--max-batches', type=int, default=10,
+                         help='Maximum number of batches to process (default: 10)')
+    clean_parser.set_defaults(func=cmd_clean)
     
     # Parse arguments
     args = parser.parse_args()

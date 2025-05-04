@@ -63,12 +63,13 @@ A high-performance Python application that polls Hacker News for high-quality st
 
 ## Usage
 
-The application has four main commands:
+The application has five main commands:
 
 - `fetch`: Fetch stories from Hacker News and store in the database
 - `score`: Calculate relevance scores for unscored stories using Claude AI
 - `show`: Display stories meeting criteria (default command if none specified)
 - `sync`: Sync high-quality stories to Readwise Reader
+- `clean`: Clean the database of non-existent stories (remove ghost stories)
 
 ### Basic Usage
 
@@ -326,6 +327,22 @@ Sync Options:
 - `--max-stories N`: Maximum number of stories to sync (useful for testing)
 - `--no-relevance-filter`: Disable relevance filtering (not recommended)
 
+### Clean Command: Remove non-existent stories
+
+Over time, the database might accumulate references to stories that no longer exist on Hacker News. The `clean` command helps remove these "ghost" stories:
+
+```bash
+# Clean the database with default settings
+hn-poll clean
+
+# Clean with custom parameters
+hn-poll clean --batch-size 50 --max-batches 20
+```
+
+Clean Options:
+- `--batch-size N`: Number of stories to check in each batch (default: 100)
+- `--max-batches N`: Maximum number of batches to process (default: 10)
+
 ## Typical Workflow
 
 A typical workflow might look like this:
@@ -372,4 +389,33 @@ A typical workflow might look like this:
    hn-poll sync --max-stories 5
    ```
 
-This separation of concerns allows for more efficient API usage and clearer operation.
+4. **Automated Workflow with Shell Script**:
+
+   This project includes a convenient shell script that automates the entire fetch-score-sync workflow:
+
+   ```bash
+   # Run with default settings
+   ./sync_stories.sh
+   
+   # Run with custom settings
+   ./sync_stories.sh --hours 48 --min-score 20 --min-comments 10 --min-relevance 70 --max-stories 15 --source best
+   
+   # Run with database cleanup (removes non-existent stories)
+   ./sync_stories.sh --cleanup
+   
+   # Run with custom cleanup settings
+   ./sync_stories.sh --cleanup --batch-size 50 --max-batches 10
+   ```
+
+   Available options:
+   - `--hours N`: Number of hours to look back (default: 24)
+   - `--min-score N`: Minimum HN score threshold (default: 30)
+   - `--min-comments N`: Minimum number of comments threshold (default: 20)
+   - `--min-relevance N`: Minimum relevance score threshold (default: 75)
+   - `--max-stories N`: Maximum number of stories to sync (default: 10)
+   - `--source TYPE`: Source to fetch stories from (default: top, options: top, best, new)
+   - `--cleanup`: Enable database cleanup to remove non-existent stories
+   - `--batch-size N`: Number of stories to check in each cleanup batch (default: 50)
+   - `--max-batches N`: Maximum number of batches for cleanup (default: 5)
+
+This separation of concerns allows for more efficient API usage and clearer operation. The shell script provides a convenient way to automate the entire workflow with a single command.
