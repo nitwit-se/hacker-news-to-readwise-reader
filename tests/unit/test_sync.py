@@ -106,7 +106,8 @@ def test_sync_with_readwise_max_stories(mock_db_path, monkeypatch):
             min_hn_score=30,
             min_relevance=75,
             batch_size=10,
-            max_stories=3
+            max_stories=3,
+            min_comments=30  # Add min_comments parameter
         )
     
     # Check that the result is correct
@@ -208,7 +209,8 @@ def test_sync_with_readwise_without_max_stories(mock_db_path, monkeypatch):
             hours=24,
             min_hn_score=30,
             min_relevance=75,
-            batch_size=10
+            batch_size=10,
+            min_comments=30  # Add min_comments parameter
         )
     
     # Check that the result is correct
@@ -231,6 +233,7 @@ def test_cmd_sync(monkeypatch):
         batch_size = 10
         max_stories = 5
         no_relevance_filter = False
+        min_comments = 30  # Add min_comments
     
     # Mock sync_with_readwise to avoid actual syncing
     mock_sync = MagicMock(return_value=5)
@@ -248,7 +251,8 @@ def test_cmd_sync(monkeypatch):
         min_hn_score=30,
         min_relevance=75,
         batch_size=5,  # Note: should be min(args.batch_size, 5)
-        max_stories=5
+        max_stories=5,
+        min_comments=30  # Add min_comments
     )
 
 
@@ -263,6 +267,7 @@ def test_cmd_sync_no_relevance_filter(monkeypatch):
         batch_size = 10
         max_stories = 5
         no_relevance_filter = True
+        min_comments = 30  # Add min_comments
     
     # Mock sync_with_readwise to avoid actual syncing
     mock_sync = MagicMock(return_value=8)
@@ -278,7 +283,8 @@ def test_cmd_sync_no_relevance_filter(monkeypatch):
     mock_sync.assert_called_with(
         hours=24,
         min_hn_score=30,
-        min_relevance=None,  # Should be None when no_relevance_filter is True
+        min_relevance=75,  # Now it should use the min_relevance value even with no_relevance_filter=True
         batch_size=5,  # Note: should be min(args.batch_size, 5)
-        max_stories=5
+        max_stories=5,
+        min_comments=30  # Add min_comments
     )

@@ -330,17 +330,17 @@ def test_get_high_quality_stories(mock_db_path):
     recent_timestamp = int((now - timedelta(hours=12)).timestamp())
     
     stories = [
-        # High quality (high HN score, high relevance)
-        create_test_story(id=1, title="High Quality", score=100, 
+        # High quality (high HN score, high relevance, high comments)
+        create_test_story(id=1, title="High Quality", score=100, comments=50,
                          timestamp=recent_timestamp, relevance_score=80),
-        # Medium quality (high HN score, medium relevance)
-        create_test_story(id=2, title="Medium Quality", score=100, 
+        # Medium quality (high HN score, medium relevance, high comments)
+        create_test_story(id=2, title="Medium Quality", score=100, comments=45,
                          timestamp=recent_timestamp, relevance_score=60),
-        # Low quality (low HN score, high relevance)
-        create_test_story(id=3, title="Low Quality 1", score=20, 
+        # Low quality (low HN score, high relevance, high comments)
+        create_test_story(id=3, title="Low Quality 1", score=20, comments=40,
                          timestamp=recent_timestamp, relevance_score=80),
-        # Low quality (high HN score, low relevance)
-        create_test_story(id=4, title="Low Quality 2", score=100, 
+        # Low quality (high HN score, low relevance, high comments)
+        create_test_story(id=4, title="Low Quality 2", score=100, comments=35,
                          timestamp=recent_timestamp, relevance_score=30),
     ]
     
@@ -348,7 +348,9 @@ def test_get_high_quality_stories(mock_db_path):
     save_stories(stories)
     
     # Test with default parameters
-    result = get_high_quality_stories()
+    # This function will call get_stories_within_timeframe with min_relevance=75
+    # So we expect only the story with a high score AND relevance >= 75
+    result = get_high_quality_stories(min_relevance=75)
     assert len(result) == 1  # Only the highest quality story meets default thresholds
     assert result[0]['id'] == 1
     

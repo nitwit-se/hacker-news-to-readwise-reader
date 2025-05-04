@@ -54,7 +54,7 @@
 - [x] Implement relevance score storage for Claude AI integration
 - [x] Add database persistence for relevance scores
 - [x] Improve Claude AI integration with response caching via database
-- [x] Optimize Anthropic API usage with domain-based caching
+- [x] Simplify prompt system by removing domain_relevance and using only story_relevance prompt
 - [x] Add asynchronous batch processing for relevance scoring
 - [x] Create background worker script for independent story scoring
 - [x] Add flexible scoring modes (scored-only, background-score)
@@ -70,6 +70,7 @@
 - [ ] Add more advanced filtering (by type, domain, keywords)
 - [ ] Add ability to customize interest categories via config file
 - [ ] Implement automatic scheduled scoring with cron/systemd
+- [ ] Consider using a fine-tuned model for relevance scoring to improve speed
 
 ## Project Management
 - [x] Update TODO.md with completed items

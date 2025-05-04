@@ -273,14 +273,13 @@ def cmd_score(args: argparse.Namespace) -> int:
     if args.extract_content:
         print("Content extraction enabled - this may take longer but should provide more accurate scoring")
     
-    # Set prompt template paths via environment variables if specified
+    # Set prompt template path via environment variable if specified
     if args.story_prompt:
         os.environ["HN_STORY_PROMPT_FILE"] = args.story_prompt
         print(f"Using custom story prompt template: {args.story_prompt}")
         
     if args.domain_prompt:
-        os.environ["HN_DOMAIN_PROMPT_FILE"] = args.domain_prompt
-        print(f"Using custom domain prompt template: {args.domain_prompt}")
+        print("Warning: --domain-prompt is deprecated and will be ignored. All stories now use the story prompt template.")
     
     scored_count = asyncio.run(score_stories_async(
         hours=args.hours,
@@ -630,7 +629,7 @@ def main() -> int:
     score_parser.add_argument('--story-prompt', type=str,
                           help='Path to custom story relevance prompt template file')
     score_parser.add_argument('--domain-prompt', type=str,
-                          help='Path to custom domain relevance prompt template file')
+                          help='[DEPRECATED] Path to custom domain relevance prompt template file (will be ignored)')
     score_parser.set_defaults(func=cmd_score)
     
     # 'show' command

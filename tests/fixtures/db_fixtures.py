@@ -17,6 +17,7 @@ def create_test_story(
     timestamp: int = None,
     hours_ago: int = 12,
     relevance_score: int = None,
+    comments: int = 42,  # Add comments parameter with a reasonable default
 ) -> Dict[str, Any]:
     """
     Create a test story with specified parameters.
@@ -45,6 +46,7 @@ def create_test_story(
         "title": title,
         "url": url,
         "score": score,
+        "comments": comments,  # Add comments field
         "by": by,
         "time": timestamp,
         "type": "story",
@@ -81,6 +83,8 @@ def create_test_stories(count: int = 5, base_id: int = 39428394, hours_range: in
         hours_ago = (i * hours_range // count)
         # Vary the relevance (None, or 0-100)
         relevance_score = None if i % 3 == 0 else (i * 20) % 100
+        # Vary the comments (10-100)
+        comments = 10 + (i * 20) % 90
         
         story = create_test_story(
             id=id,
@@ -89,7 +93,8 @@ def create_test_stories(count: int = 5, base_id: int = 39428394, hours_range: in
             score=score,
             by=f"user_{i+1}",
             hours_ago=hours_ago,
-            relevance_score=relevance_score
+            relevance_score=relevance_score,
+            comments=comments
         )
         
         stories.append(story)
@@ -111,14 +116,15 @@ def populate_test_db(db_connection, stories: List[Dict[str, Any]]) -> None:
     for story in stories:
         cursor.execute('''
         INSERT INTO stories (
-            id, title, url, score, by, time, timestamp, type, last_updated, relevance_score
+            id, title, url, score, comments, by, time, timestamp, type, last_updated, relevance_score
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             story['id'],
             story['title'],
             story['url'],
             story['score'],
+            story['comments'],  # Add comments
             story['by'],
             story['time'],
             story['timestamp'],

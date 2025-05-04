@@ -123,7 +123,7 @@ Score Options:
 - `--batch-size N`: Number of stories to process in each batch (default: 10)
 - `--extract-content`: Extract and analyze article content for more accurate scoring
 - `--story-prompt PATH`: Path to custom story relevance prompt template file
-- `--domain-prompt PATH`: Path to custom domain relevance prompt template file
+- `--domain-prompt PATH`: [DEPRECATED] This option is deprecated and will be ignored
 
 ### Show Command: Display filtered stories
 
@@ -267,7 +267,7 @@ When adding new features, please include appropriate tests to maintain code qual
 
 ## Personalized Relevance Scoring
 
-When using the scoring feature, the application leverages Claude AI to calculate relevance scores for stories based on the prompt templates in the `prompts/` directory.
+When using the scoring feature, the application leverages Claude AI to calculate relevance scores for stories based on the prompt template in the `prompts/` directory.
 
 - Default interest categories (defined in `prompts/story_relevance.txt`):
   - Programming and software development
@@ -284,7 +284,7 @@ When using the scoring feature, the application leverages Claude AI to calculate
   - Cool toys and gadgets
   - Climate Change and Mitigation
 
-To customize these interests, edit the template files in the `prompts/` directory or create your own custom templates and use them with the `--story-prompt` and `--domain-prompt` options.
+To customize these interests, edit the template file in the `prompts/` directory or create your own custom template and use it with the `--story-prompt` option.
 
 Each story receives a relevance score from 0-100 indicating how well it matches your interests:
 - 0-25: Not relevant
@@ -292,32 +292,30 @@ Each story receives a relevance score from 0-100 indicating how well it matches 
 - 51-75: Moderately relevant
 - 76-100: Highly relevant
 
-### Customizing Prompt Templates
+### Customizing Prompt Template
 
-The application now supports customizable prompt templates for Claude AI classification. This allows you to tailor the interest categories to your own preferences without modifying code:
+The application supports a customizable prompt template for Claude AI classification. This allows you to tailor the interest categories to your own preferences without modifying code:
 
-1. **Default template files** are located in the `prompts/` directory:
+1. **Default template file** is located in the `prompts/` directory:
    - `story_relevance.txt`: Template for classifying stories
-   - `domain_relevance.txt`: Template for classifying domains
 
-2. **Using custom templates**:
+2. **Using custom template**:
    ```bash
-   # Use custom prompt templates with the score command
-   hn-poll score --story-prompt /path/to/your/story_template.txt --domain-prompt /path/to/your/domain_template.txt
+   # Use custom prompt template with the score command
+   hn-poll score --story-prompt /path/to/your/story_template.txt
    ```
 
-3. **Environment variables**:
-   You can also set these paths using environment variables:
+3. **Environment variable**:
+   You can also set this path using an environment variable:
    ```bash
    export HN_STORY_PROMPT_FILE=/path/to/your/story_template.txt
-   export HN_DOMAIN_PROMPT_FILE=/path/to/your/domain_template.txt
    hn-poll score
    ```
 
 4. **Template guidelines**:
    - Keep the format consistent - the template should instruct Claude to return a single integer between 0-100
    - Maintain clear interest categories that Claude can evaluate against
-   - Edit the examples of interests/non-interests to match your preferences
+   - Edit the examples of interests to match your preferences
 
 **Key advantages of the relevance score system:**
 - Scores are persisted in the database, minimizing redundant API calls
@@ -325,16 +323,14 @@ The application now supports customizable prompt templates for Claude AI classif
 - API failures are handled gracefully - existing relevance scores are preserved in case of API errors
 - Users can adjust the relevance threshold to be more or less selective
 - Scores are displayed with each story, providing insight into the filtering system
-- Domain-based caching reduces API calls for common websites
 - Batch processing with asynchronous requests for performance
 
 The optimized relevance scoring system employs several strategies to minimize API usage:
 1. **Database Persistence**: Scores are stored in the database so they only need to be calculated once
-2. **Domain Caching**: Common domains are cached to avoid redundant scoring
-3. **Batch Processing**: Processes multiple stories concurrently for efficiency
-4. **Separation of Concerns**: Clear separation between fetching, scoring, and displaying
+2. **Batch Processing**: Processes multiple stories concurrently for efficiency
+3. **Separation of Concerns**: Clear separation between fetching, scoring, and displaying
 
-Claude analyzes story titles and domains to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.
+Claude analyzes story titles, URLs, and optionally article content to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.
 
 ### Sync Command: Save stories to Readwise Reader
 

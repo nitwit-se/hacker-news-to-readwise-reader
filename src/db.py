@@ -656,14 +656,17 @@ def update_last_readwise_sync_time() -> str:
 def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_relevance: Optional[int] = None, min_comments: Optional[int] = None) -> List[Dict[str, Any]]:
     """Get stories that haven't been synced to Readwise Reader.
     
+    Only returns stories with a non-NULL relevance score. If min_relevance is None,
+    it defaults to 75 to ensure we only sync high-quality stories.
+    
     Args:
         hours (Optional[int]): Number of hours to look back
         min_score (int): Minimum HN score threshold
-        min_relevance (Optional[int]): Minimum relevance score threshold
+        min_relevance (Optional[int]): Minimum relevance score threshold (defaults to 75 if None)
         min_comments (Optional[int]): Minimum number of comments threshold
         
     Returns:
-        List[Dict[str, Any]]: List of unsynced story dictionaries
+        List[Dict[str, Any]]: List of unsynced story dictionaries meeting quality criteria
     """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -673,7 +676,7 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
     query_parts = ['SELECT * FROM stories WHERE readwise_synced = 0 OR readwise_synced IS NULL']
     params = []
     
-    # Add time filter if specified
+    # Add time filter if specified - This is critical to ensure proper filtering by time
     if hours is not None:
         cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
         cutoff_timestamp = int(cutoff_time.timestamp())
@@ -693,22 +696,29 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
         query_parts.append('AND comments >= ?')
         params.append(min_comments)
     
-    # Add relevance filter if specified
+    # IMPORTANT: Always require a non-NULL relevance score
+    query_parts.append('AND relevance_score IS NOT NULL')
+    
+    # Always apply minimum relevance threshold - default should be 75 if not specified
+    # This ensures we only sync high-quality stories
     if min_relevance is not None:
         query_parts.append('AND relevance_score >= ?')
         params.append(min_relevance)
+    else:
+        # If min_relevance is not specified, use a sensible default of 75
+        # to avoid syncing low-quality stories
+        query_parts.append('AND relevance_score >= 75')
     
     # Remove the URL check to allow all stories (we'll handle missing URLs in the sync code)
     # query_parts.append('AND url IS NOT NULL AND url != ""')
     
     # Add ordering - prioritize story quality over recency
-    # Sort by score first, then by comments, then by relevance_score
+    # When relevance filtering is enabled, use relevance in the sorting
     if min_relevance is not None:
-        # When relevance filtering is enabled, use relevance in the sorting
         query_parts.append('ORDER BY score DESC, relevance_score DESC, comments DESC')
     else:
         # When relevance filtering is disabled, just use score and comments
-        query_parts.append('ORDER BY score DESC, comments DESC, last_updated DESC')
+        query_parts.append('ORDER BY score DESC, comments DESC')
     
     # Execute query
     cursor.execute(' '.join(query_parts), tuple(params))
