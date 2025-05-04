@@ -328,6 +328,11 @@ def main() -> int:
         
         # If no command specified, default to 'show'
         if not args.command:
+            # Create default args for show command
+            args.hours = 24  # Default hours
+            args.min_score = 30  # Default min score
+            args.min_relevance = 75  # Default min relevance
+            args.hn_weight = 0.7  # Default HN weight
             return cmd_show(args)
         
         # Otherwise, run the appropriate command
