@@ -9,11 +9,16 @@ from anthropic import Anthropic, AsyncAnthropic
 client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 async_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-def get_relevance_score(story: Dict[str, Any]) -> int:
+# Import our content extractor
+import asyncio
+from src.content_extractor import extract_content_from_url
+
+def get_relevance_score(story: Dict[str, Any], use_content_extraction: bool = False) -> int:
     """Calculate a relevance score for how well a HN story matches user interests.
     
     Args:
         story (Dict[str, Any]): Story details from the Hacker News API
+        use_content_extraction (bool): Whether to extract and use article content
         
     Returns:
         int: Relevance score from 0-100, where higher values indicate more relevant content
@@ -26,11 +31,40 @@ def get_relevance_score(story: Dict[str, Any]) -> int:
     if url and '://' in url:
         domain = url.split('://')[1].split('/')[0]
     
+    # Extract content if enabled and URL is available
+    article_content = ""
+    if use_content_extraction and url:
+        try:
+            # Run content extraction in a new event loop if we're not already in one
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # Use an executor if we're already in an event loop
+                    content = asyncio.run_coroutine_threadsafe(
+                        extract_content_from_url(url),
+                        loop
+                    ).result(timeout=60)  # 60 second timeout
+                else:
+                    # If we're not in an event loop, create one
+                    content = asyncio.run(extract_content_from_url(url))
+                
+                if content:
+                    # Limit content length to avoid token limits
+                    article_content = content[:5000] if len(content) > 5000 else content
+            except Exception as e:
+                print(f"Error extracting content from {url}: {e}")
+        except Exception as e:
+            print(f"Unexpected error in content extraction: {e}")
+    
     # Construct prompt with all available information
     prompt = f"Title: {title}\nDomain: {domain}\nURL: {url}"
     
+    # Add article content if available
+    if article_content:
+        prompt += f"\n\nArticle Content:\n{article_content}"
+    
     # Interest categories defined in the system prompt
-    system_prompt = """You are a personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based ONLY on its title and URL.
+    system_prompt = """You are a personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based on the information provided, which may include title, URL, and article content.
 
 To help you make a judgement here are some examples of things that interest me as well as things that I know do not interest me. These are examples.
 
@@ -98,12 +132,13 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
         return 0
 
 # Keep the old function for backward compatibility, but use the new one internally
-def is_interesting(story: Dict[str, Any], threshold: int = 75) -> bool:
+def is_interesting(story: Dict[str, Any], threshold: int = 75, use_content_extraction: bool = False) -> bool:
     """Classify if a HN story matches user interests using a relevance score.
     
     Args:
         story (Dict[str, Any]): Story details from the Hacker News API
         threshold (int): Minimum relevance score to be considered interesting (0-100)
+        use_content_extraction (bool): Whether to extract and use article content
         
     Returns:
         bool: True if the story's relevance score exceeds the threshold
@@ -113,7 +148,7 @@ def is_interesting(story: Dict[str, Any], threshold: int = 75) -> bool:
         return story['relevance_score'] >= threshold
     
     # Otherwise, calculate a new score
-    score = get_relevance_score(story)
+    score = get_relevance_score(story, use_content_extraction=use_content_extraction)
     
     # Store the score in the story dictionary for potential later use
     story['relevance_score'] = score
@@ -195,11 +230,12 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
     except Exception:
         return 0
 
-async def get_relevance_score_async(story: Dict[str, Any]) -> int:
+async def get_relevance_score_async(story: Dict[str, Any], use_content_extraction: bool = False) -> int:
     """Asynchronous version of get_relevance_score.
     
     Args:
         story (Dict[str, Any]): Story details from the Hacker News API
+        use_content_extraction (bool): Whether to extract and use article content
         
     Returns:
         int: Relevance score from 0-100
@@ -214,7 +250,7 @@ async def get_relevance_score_async(story: Dict[str, Any]) -> int:
         
         # Check if we already have a cached score for this domain
         # If the domain has been seen before, we can use a simplified approach
-        if domain:
+        if domain and not use_content_extraction:  # Skip domain shortcut if we're extracting content
             try:
                 # Use the cached function
                 domain_score = get_domain_relevance_score(domain)
@@ -226,8 +262,24 @@ async def get_relevance_score_async(story: Dict[str, Any]) -> int:
                 # Fall back to full analysis if there's an error
                 pass
     
+    # Extract content if enabled and URL is available
+    article_content = ""
+    if use_content_extraction and url:
+        try:
+            # We can directly await since we're already in an async context
+            content = await extract_content_from_url(url)
+            if content:
+                # Limit content length to avoid token limits
+                article_content = content[:5000] if len(content) > 5000 else content
+        except Exception as e:
+            print(f"Error extracting content from {url}: {e}")
+    
     # Construct prompt with all available information
     prompt = f"Title: {title}\nDomain: {domain}\nURL: {url}"
+    
+    # Add article content if available
+    if article_content:
+        prompt += f"\n\nArticle Content:\n{article_content}"
     
     # Interest categories defined in the system prompt
     system_prompt = """Evaluate how strongly this Hacker News story would match the following interest categories:
@@ -303,12 +355,13 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
         print(f"Error calculating relevance score asynchronously: {e}")
         return 0
 
-async def process_story_batch_async(stories: List[Dict[str, Any]], throttle_delay: float = 0.2) -> List[Dict[str, Any]]:
+async def process_story_batch_async(stories: List[Dict[str, Any]], throttle_delay: float = 0.2, use_content_extraction: bool = False) -> List[Dict[str, Any]]:
     """Process a batch of stories asynchronously to get relevance scores.
     
     Args:
         stories (List[Dict[str, Any]]): List of story dictionaries to process
         throttle_delay (float): Delay between API calls to avoid rate limits
+        use_content_extraction (bool): Whether to extract and use article content
         
     Returns:
         List[Dict[str, Any]]: List of stories with added relevance scores
@@ -319,7 +372,7 @@ async def process_story_batch_async(stories: List[Dict[str, Any]], throttle_dela
         # Add throttling delay to avoid hitting rate limits
         # Space out the calls slightly for better API behavior
         await asyncio.sleep(throttle_delay * i)
-        task = asyncio.create_task(get_relevance_score_async(story))
+        task = asyncio.create_task(get_relevance_score_async(story, use_content_extraction=use_content_extraction))
         tasks.append((story, task))
     
     # Wait for all tasks to complete and update stories

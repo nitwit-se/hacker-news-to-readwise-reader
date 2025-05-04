@@ -16,6 +16,8 @@ This project is a high-performance Python application that polls the Hacker News
 - **anthropic**: Python client for the Anthropic Claude API
 - **typing**: For static type annotations throughout the codebase
 - **pytest**: For comprehensive unit and integration testing
+- **playwright**: For browser automation to extract web content
+- **trafilatura**: For extracting clean text from HTML web pages
 
 ## Project Structure
 
@@ -24,6 +26,7 @@ This project is a high-performance Python application that polls the Hacker News
   - `db.py`: Database operations (initialization, queries, updates, score tracking)
   - `main.py`: Main program logic and command-line interface
   - `classifier.py`: Claude AI integration for interest-based filtering
+  - `content_extractor.py`: Extracts content from web pages using Playwright and Trafilatura
 - `tests/`: Test suite
   - `unit/`: Unit tests for individual modules
   - `integration/`: Integration tests for component interaction
@@ -58,6 +61,9 @@ uv run python -m src.main --source best
 # Use Claude AI for interest-based filtering
 export ANTHROPIC_API_KEY=your_api_key_here
 uv run python -m src.main --claude
+
+# Use content extraction for more accurate relevance scoring
+uv run python -m src.main score --extract-content
 ```
 
 ### Testing
@@ -106,6 +112,7 @@ uv run pytest tests/unit/test_api.py
    - Each story is analyzed by Claude AI against personalized interest categories
    - Interest categories include technology, programming, security, DIY projects, and more
    - Only stories matching user interests are kept in the final output
+   - Optional content extraction for more accurate scoring by analyzing the actual article text
 
 6. **Smart Scoring and Sorting**: The application uses a weighted scoring system:
    - Combines HN score and relevance score using a configurable weighted formula
@@ -188,3 +195,4 @@ Potential improvements to consider:
 - Improve Claude AI integration with response caching
 - Add ability to customize interest categories via configuration file
 - Create visualization of story score trends over time
+- Enhance content extraction with configuration options for timeout and processing settings

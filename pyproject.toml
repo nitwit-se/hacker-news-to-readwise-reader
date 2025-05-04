@@ -10,6 +10,8 @@ dependencies = [
     "aiohttp>=3.9.1",
     "asyncio>=3.4.3",
     "anthropic>=0.19.1",
+    "playwright>=1.40.0",
+    "trafilatura>=1.6.0",
 ]
 
 [project.optional-dependencies]

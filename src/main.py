@@ -137,13 +137,14 @@ async def fetch_stories_async(hours: int = 24, min_score: int = 30, source: str 
     
     return new_count, update_count
 
-async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: int = 10) -> int:
+async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: int = 10, use_content_extraction: bool = False) -> int:
     """Calculate relevance scores for unscored stories.
     
     Args:
         hours (int): Number of hours to look back for unscored stories
         min_score (int): Minimum HN score threshold for stories to score
         batch_size (int): Number of stories to process in each batch
+        use_content_extraction (bool): Whether to extract and use article content
         
     Returns:
         int: Number of stories scored
@@ -161,6 +162,14 @@ async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: 
     total_stories = sum(len(batch) for batch in story_batches)
     print(f"Found {total_stories} unscored stories in {len(story_batches)} batches.")
     
+    if use_content_extraction:
+        print("Content extraction is enabled. This will download and analyze the full text of each article.")
+        print("This process will be slower but should provide more accurate scoring.")
+        # Reduce batch size if content extraction is enabled to avoid overloading
+        if batch_size > 5:
+            batch_size = 5
+            print(f"Reducing batch size to {batch_size} to avoid overloading with content extraction.")
+    
     scored_count = 0
     
     # Process each batch asynchronously
@@ -168,7 +177,7 @@ async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: 
         print(f"Processing batch {i+1}/{len(story_batches)} ({len(batch)} stories)...")
         
         # Process the batch asynchronously
-        processed_batch = await process_story_batch_async(batch)
+        processed_batch = await process_story_batch_async(batch, use_content_extraction=use_content_extraction)
         scored_count += len(processed_batch)
         
         # Update the database after each batch
@@ -254,10 +263,14 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 def cmd_score(args: argparse.Namespace) -> int:
     """Handle the 'score' subcommand."""
     print("Calculating relevance scores for unscored stories...")
+    if args.extract_content:
+        print("Content extraction enabled - this may take longer but should provide more accurate scoring")
+    
     scored_count = asyncio.run(score_stories_async(
         hours=args.hours,
         min_score=args.min_score,
-        batch_size=args.batch_size
+        batch_size=args.batch_size,
+        use_content_extraction=args.extract_content
     ))
     print(f"Done! Calculated relevance scores for {scored_count} stories.")
     return 0
@@ -308,6 +321,8 @@ def main() -> int:
                                      help='Calculate relevance scores for unscored stories')
     score_parser.add_argument('--batch-size', type=int, default=10,
                           help='Number of stories to process in each batch (default: 10)')
+    score_parser.add_argument('--extract-content', action='store_true',
+                          help='Extract and analyze article content for more accurate scoring')
     score_parser.set_defaults(func=cmd_score)
     
     # 'show' command
