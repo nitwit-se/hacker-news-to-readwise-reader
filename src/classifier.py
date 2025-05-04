@@ -64,7 +64,9 @@ def get_relevance_score(story: Dict[str, Any], use_content_extraction: bool = Fa
         prompt += f"\n\nArticle Content:\n{article_content}"
     
     # Interest categories defined in the system prompt
-    system_prompt = """You are a personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based on the information provided, which may include title, URL, and article content.
+    system_prompt = """I am the CTO for a post series-A startup with a SaaS product modelling climate mitigation plans for cities. As CTO it is my job to stay on top of all relevant news for my job, as well as nurturing my technical / hacker interests.
+
+You are my personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based on the information provided, which may include title, URL, and article content.
 
 To help you make a judgement here are some examples of things that interest me as well as things that I know do not interest me. These are examples.
 
@@ -91,9 +93,10 @@ NOT MY INTERESTS:
 - Political news (unless directly related to technology policy or climate change)
 - General mainstream technology coverage
 
-Rate the story's relevance to these interests on a scale from 0-100, where 0 would be completely uninteresting and 100 would be almost guaranteed to be of interest to me.
+Rate the story's relevance to these interests on a scale from 0-100, where 0 would be completely uninteresting and 100 would be almost guaranteed to be of interest to me personally or for my work as CTO.
 
-ONLY respond with a single integer between 0 and 100, and nothing else."""
+ONLY respond with a single integer between 0 and 100, and nothing else.
+"""
     
     # Call Claude API to classify
     try:
@@ -282,41 +285,36 @@ async def get_relevance_score_async(story: Dict[str, Any], use_content_extractio
         prompt += f"\n\nArticle Content:\n{article_content}"
     
     # Interest categories defined in the system prompt
-    system_prompt = """Evaluate how strongly this Hacker News story would match the following interest categories:
+    system_prompt = """I am the CTO for a post series-A startup with a SaaS product modelling climate mitigation plans for cities. As CTO it is my job to stay on top of all relevant news for my job, as well as nurturing my technical / hacker interests.
 
-1. Technology & Tools:
-   - Emacs, Linux, NixOS, MacOS, Apple hardware
-   - E-book readers and related technology
+You are my personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based on the information provided, which may include title, URL, and article content.
 
-2. Programming & Computer Science:
-   - Python, Julia, Lisp
-   - Functional programming, logic programming
-   - Any interesting programming language concepts
+To help you make a judgement here are some examples of things that interest me as well as things that I know do not interest me. These are examples.
 
-3. Security & Hacking:
-   - Infosec, cybersecurity, penetration testing
-   - Ethical hacking, cracking (in educational context)
-   - Security research, vulnerabilities
+MY INTERESTS:
+- Programming and software development
+- AI, machine learning, and LLMs
+- Linux, Emacs, NixOS
+- Computer science theory and algorithms
+- Cybersecurity, hacking techniques, and security vulnerabilities
+- Science fiction concepts and technology
+- Hardware hacking and electronics
+- Systems programming and low-level computing
+- Novel computing paradigms and research
+- Tech history and vintage computing
+- Mathematics and computational theory
+- Cool toys and gadgetst
+- Climate Change and Mitigation
 
-4. Projects & Creativity:
-   - DIY/home projects with technology
-   - Creative coding, generative art
-   - Hardware hacking, electronics
+NOT MY INTERESTS:
+- Business/startup funding news
+- Tech company stock prices or financial performance
+- Product announcements (unless truly innovative)
+- General tech industry news without technical depth
+- Political news (unless directly related to technology policy or climate change)
+- General mainstream technology coverage
 
-5. Science & Research:
-   - AI, machine learning, LLMs
-   - Climate change, environmental tech
-   - Scientific computing
-
-6. Books & Reading:
-   - Technical books, programming books
-   - E-book technology, digital reading
-
-Rate the story's relevance to these interests on a scale from 0-100, where:
-- 0-25: Not relevant to these interests
-- 26-50: Slightly relevant to these interests
-- 51-75: Moderately relevant to these interests
-- 76-100: Highly relevant to these interests
+Rate the story's relevance to these interests on a scale from 0-100, where 0 would be completely uninteresting and 100 would be almost guaranteed to be of interest to me personally or for my work as CTO.
 
 ONLY respond with a single integer between 0 and 100, and nothing else."""
     
