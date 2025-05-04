@@ -680,9 +680,13 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
         query_parts.append('AND time >= ?')
         params.append(cutoff_timestamp)
     
-    # Add score filter
-    query_parts.append('AND score >= ?')
-    params.append(min_score)
+    # Add score filter - ensure it's strictly greater than 0 when min_score is 0
+    if min_score <= 0:
+        # Force a minimum score of 1 to avoid syncing empty/invalid stories
+        query_parts.append('AND score > 0')
+    else:
+        query_parts.append('AND score >= ?')
+        params.append(min_score)
     
     # Add comments filter if specified
     if min_comments is not None:
@@ -697,8 +701,14 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
     # Remove the URL check to allow all stories (we'll handle missing URLs in the sync code)
     # query_parts.append('AND url IS NOT NULL AND url != ""')
     
-    # Add ordering - prefer recently updated stories
-    query_parts.append('ORDER BY last_updated DESC')
+    # Add ordering - prioritize story quality over recency
+    # Sort by score first, then by comments, then by relevance_score
+    if min_relevance is not None:
+        # When relevance filtering is enabled, use relevance in the sorting
+        query_parts.append('ORDER BY score DESC, relevance_score DESC, comments DESC')
+    else:
+        # When relevance filtering is disabled, just use score and comments
+        query_parts.append('ORDER BY score DESC, comments DESC, last_updated DESC')
     
     # Execute query
     cursor.execute(' '.join(query_parts), tuple(params))

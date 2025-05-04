@@ -323,8 +323,13 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
     
     # Apply max_stories limit if specified
     if max_stories and len(stories) > max_stories:
-        print(f"Limiting to {max_stories} stories (out of {len(stories)} found)")
+        print(f"Limiting to {max_stories} highest quality stories (out of {len(stories)} found)")
+        # Sorting already done by the get_unsynced_stories function, so just take the first N
         stories = stories[:max_stories]
+        
+        # Extra validation - log the stories to verify their quality
+        for i, story in enumerate(stories):
+            print(f"  Story {i+1}: ID={story.get('id')}, Score={story.get('score')}, Comments={story.get('comments')}, Relevance={story.get('relevance_score')}")
     
     print(f"Found {len(stories)} unsynced stories to process.")
     
