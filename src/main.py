@@ -16,10 +16,13 @@ from src.db import init_db, get_last_poll_time, update_last_poll_time
 from src.db import get_last_oldest_id, update_last_oldest_id
 from src.db import save_or_update_stories, get_stories_within_timeframe, update_story_scores
 from src.db import get_unscored_stories_in_batches
+from src.db import get_unsynced_stories, mark_stories_as_synced, update_last_readwise_sync_time
+from src.db import get_readwise_sync_stats
 from src.api import get_stories_until_cutoff, get_stories_details_async, get_stories_from_maxitem
 from src.api import get_filtered_stories_async
 from src.classifier import is_interesting, get_relevance_score
 from src.classifier import process_story_batch_async, get_relevance_score_async
+from src.readwise import batch_add_to_readwise, ReadwiseError
 
 def calculate_combined_score(story: Dict[str, Any], hn_weight: float = 0.7) -> float:
     """Calculate a combined score using both HN score and relevance score.
@@ -285,6 +288,132 @@ def cmd_show(args: argparse.Namespace) -> int:
     )
     return 0
 
+def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: Optional[int] = 75, batch_size: int = 10) -> int:
+    """Sync stories to Readwise Reader.
+    
+    Args:
+        hours (int): Number of hours to look back
+        min_hn_score (int): Minimum HN score threshold
+        min_relevance (Optional[int]): Minimum relevance score threshold
+        batch_size (int): Number of stories to process in each batch
+        
+    Returns:
+        int: Number of stories synced
+    """
+    # Initialize database if not exists
+    init_db()
+    
+    print(f"Finding unsynced stories from the past {hours} hours with HN score >= {min_hn_score}")
+    if min_relevance is not None:
+        print(f"and relevance score >= {min_relevance}...")
+    
+    # Get unsynced stories matching criteria
+    stories = get_unsynced_stories(hours=hours, min_score=min_hn_score, min_relevance=min_relevance)
+    
+    if not stories:
+        print("No unsynced stories found matching your criteria.")
+        return 0
+    
+    print(f"Found {len(stories)} unsynced stories.")
+    
+    # Check for Readwise API key
+    if "READWISE_API_KEY" not in os.environ:
+        print("Error: READWISE_API_KEY environment variable not set.")
+        print("Please set it to your Readwise Reader API key before running this command.")
+        return 1
+    
+    # Fetch all existing URLs from Readwise Reader once at the start
+    try:
+        print("Fetching all documents from Readwise Reader...")
+        from src.readwise import get_all_readwise_urls
+        existing_urls = get_all_readwise_urls()
+        print(f"Found {len(existing_urls)} documents in Readwise Reader")
+    except Exception as e:
+        print(f"Failed to fetch existing URLs: {e}")
+        print("Will continue without pre-checking for duplicates.")
+        existing_urls = set()
+    
+    # Process stories in batches
+    synced_count = 0
+    failed_ids = []
+    total_batches = math.ceil(len(stories) / batch_size)
+    
+    for i in range(0, len(stories), batch_size):
+        batch = stories[i:i+batch_size]
+        batch_num = (i // batch_size) + 1
+        print(f"Processing batch {batch_num}/{total_batches} ({len(batch)} stories)...")
+        
+        try:
+            # Add the batch to Readwise, using our pre-fetched URL set
+            added_ids, batch_failed_ids = batch_add_to_readwise(batch, existing_urls=existing_urls)
+            
+            # Update database for successfully synced stories
+            if added_ids:
+                marked_count = mark_stories_as_synced(added_ids)
+                synced_count += marked_count
+                print(f"Synced {marked_count} stories to Readwise Reader.")
+            
+            # Record any failures
+            if batch_failed_ids:
+                failed_ids.extend(batch_failed_ids)
+                print(f"Failed to sync {len(batch_failed_ids)} stories in this batch.")
+                
+            # Pause between batches
+            if batch_num < total_batches:
+                print("Pausing briefly before next batch...")
+                time.sleep(2)  # Increased pause time to avoid rate limiting
+                
+        except Exception as e:
+            print(f"Error syncing with Readwise: {e}")
+            # Add all batch IDs to failed list
+            for story in batch:
+                failed_ids.append((story.get('id'), str(e)))
+    
+    # Update the last sync time
+    if synced_count > 0:
+        update_last_readwise_sync_time()
+    
+    # Final stats
+    print(f"\nSynced {synced_count} stories to Readwise Reader.")
+    if failed_ids:
+        print(f"Failed to sync {len(failed_ids)} stories.")
+        
+    # Show sync stats
+    stats = get_readwise_sync_stats()
+    print(f"\nReadwise sync statistics:")
+    print(f"Total stories in database: {stats['total_stories']}")
+    print(f"Synced stories: {stats['synced_stories']}")
+    print(f"Unsynced stories: {stats['unsynced_stories']}")
+    print(f"Last sync time: {stats['last_sync_time']}")
+    
+    return synced_count
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    """Handle the 'sync' subcommand."""
+    print("Syncing stories with Readwise Reader...")
+    
+    # If relevance filter is disabled, set min_relevance to None
+    min_relevance = args.min_relevance if args.use_relevance else None
+    
+    # Ensure reasonable batch size to avoid rate limiting
+    batch_size = min(args.batch_size, 5)
+    if batch_size != args.batch_size:
+        print(f"Reducing batch size to {batch_size} to avoid rate limiting")
+    
+    synced_count = sync_with_readwise(
+        hours=args.hours,
+        min_hn_score=args.min_score,
+        min_relevance=min_relevance,
+        batch_size=batch_size
+    )
+    
+    if synced_count > 0:
+        print(f"Done! Synced {synced_count} stories to Readwise Reader.")
+    else:
+        print("No stories were synced to Readwise Reader.")
+        
+    return 0
+
 def main() -> int:
     """Main entry point for the program.
     
@@ -333,6 +462,17 @@ def main() -> int:
     show_parser.add_argument('--hn-weight', type=float, default=0.7,
                          help='Weight to apply to HN score (0.0-1.0, default: 0.7)')
     show_parser.set_defaults(func=cmd_show)
+    
+    # 'sync' command
+    sync_parser = subparsers.add_parser('sync', parents=[common_parser],
+                                    help='Sync stories to Readwise Reader')
+    sync_parser.add_argument('--min-relevance', type=int, default=75,
+                         help='Minimum relevance score threshold (default: 75)')
+    sync_parser.add_argument('--batch-size', type=int, default=10,
+                         help='Number of stories to process in each batch (default: 10)')
+    sync_parser.add_argument('--use-relevance', action='store_true',
+                         help='Enable relevance filtering (default: True)')
+    sync_parser.set_defaults(func=cmd_sync, use_relevance=True)
     
     # Parse arguments
     args = parser.parse_args()

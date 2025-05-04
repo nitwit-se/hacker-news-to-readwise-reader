@@ -15,18 +15,21 @@ A high-performance Python application that polls Hacker News for high-quality st
 - Claude AI-powered personalized filtering based on your interests
 - Smart scoring system that combines HN score and relevance score with configurable weights
 - Comprehensive Python type hints throughout the codebase for improved maintainability
+- Integration with Readwise Reader for saving high-quality stories
 
 ## Requirements
 
 - Python 3.12+
 - `uv` Python package manager
 - Anthropic API key (only for Claude filtering)
+- Readwise Reader API key (only for syncing to Readwise)
 - Dependencies (automatically installed):
   - requests: HTTP library for API calls
   - aiohttp: Asynchronous HTTP client
   - asyncio: Asynchronous I/O library
   - anthropic: Claude AI API client (for personalized filtering)
   - typing: Python's static type annotations
+  - backoff: Retry handling for API requests
 
 ## Installation
 
@@ -60,11 +63,12 @@ A high-performance Python application that polls Hacker News for high-quality st
 
 ## Usage
 
-The application has three main commands:
+The application has four main commands:
 
 - `fetch`: Fetch stories from Hacker News and store in the database
 - `score`: Calculate relevance scores for unscored stories using Claude AI
 - `show`: Display stories meeting criteria (default command if none specified)
+- `sync`: Sync high-quality stories to Readwise Reader
 
 ### Basic Usage
 
@@ -301,14 +305,35 @@ The optimized relevance scoring system employs several strategies to minimize AP
 
 Claude analyzes story titles and domains to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.
 
+### Sync Command: Save stories to Readwise Reader
+
+```bash
+# Set your Readwise Reader API key (required for syncing)
+export READWISE_API_KEY=your_api_key_here
+
+# Sync stories with default settings (24 hours, HN score ≥ 30, relevance score ≥ 75)
+hn-poll sync
+
+# Sync with custom parameters
+hn-poll sync --hours 48 --min-score 20 --min-relevance 60 --batch-size 5
+```
+
+Sync Options:
+- `--hours N`: Specify how many hours back to look for stories (default: 24)
+- `--min-score N`: Minimum HN score threshold (default: 30)
+- `--min-relevance N`: Minimum relevance score threshold (default: 75)
+- `--batch-size N`: Number of stories to process in each batch (default: 10)
+- `--use-relevance`: Enable relevance filtering (default: True)
+
 ## Typical Workflow
 
 A typical workflow might look like this:
 
 1. **Initial Setup**:
    ```bash
-   # Set up your API key (for relevance scoring)
-   export ANTHROPIC_API_KEY=your_api_key_here
+   # Set up your API keys
+   export ANTHROPIC_API_KEY=your_api_key_here  # For relevance scoring
+   export READWISE_API_KEY=your_api_key_here   # For Readwise syncing
    ```
 
 2. **Regular Usage**:
@@ -321,6 +346,9 @@ A typical workflow might look like this:
    
    # 3. Show high-quality, relevant stories
    hn-poll show
+   
+   # 4. Optionally, sync stories to Readwise Reader
+   hn-poll sync
    ```
 
 3. **Custom Filtering**:
@@ -332,6 +360,9 @@ A typical workflow might look like this:
    hn-poll show --hn-weight 0.5  # Equal weighting between HN and relevance
    hn-poll show --hn-weight 0.3  # Favor relevance score more heavily
    hn-poll show --hn-weight 0.9  # Favor HN score more heavily
+   
+   # Sync stories with custom thresholds
+   hn-poll sync --min-score 50 --min-relevance 80
    ```
 
 This separation of concerns allows for more efficient API usage and clearer operation.

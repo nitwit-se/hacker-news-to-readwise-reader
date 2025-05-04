@@ -12,6 +12,7 @@ dependencies = [
     "anthropic>=0.19.1",
     "playwright>=1.40.0",
     "trafilatura>=1.6.0",
+    "backoff>=2.2.1",
 ]
 
 [project.optional-dependencies]
