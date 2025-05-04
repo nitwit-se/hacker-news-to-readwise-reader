@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple, Optional, Any, Union, cast
 
 DB_PATH = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'hn_stories.db')
@@ -341,7 +341,7 @@ def get_stories_within_timeframe(hours: int = 24, min_score: int = 0, min_releva
     cursor = conn.cursor()
     
     # Calculate cutoff time in UTC for consistent timezone handling
-    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     cutoff_timestamp = int(cutoff_time.timestamp())
     
     # Base query for the time period and HN score

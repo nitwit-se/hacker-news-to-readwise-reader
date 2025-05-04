@@ -287,6 +287,7 @@ Each story receives a relevance score from 0-100 indicating how well it matches 
 **Key advantages of the relevance score system:**
 - Scores are persisted in the database, minimizing redundant API calls
 - The Anthropic API is only called for stories without existing scores
+- API failures are handled gracefully - existing relevance scores are preserved in case of API errors
 - Users can adjust the relevance threshold to be more or less selective
 - Scores are displayed with each story, providing insight into the filtering system
 - Domain-based caching reduces API calls for common websites

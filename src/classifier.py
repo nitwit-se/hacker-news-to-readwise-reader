@@ -130,9 +130,10 @@ ONLY respond with a single integer between 0 and 100, and nothing else.
                 return 0
         
     except Exception as e:
-        # Log error and default to 0 if API call fails
+        # Log error and raise the exception instead of returning 0
+        # This will prevent the caller from getting a default value when the API fails
         print(f"Error calculating relevance score: {e}")
-        return 0
+        raise
 
 # Keep the old function for backward compatibility, but use the new one internally
 def is_interesting(story: Dict[str, Any], threshold: int = 75, use_content_extraction: bool = False) -> bool:
@@ -151,12 +152,18 @@ def is_interesting(story: Dict[str, Any], threshold: int = 75, use_content_extra
         return story['relevance_score'] >= threshold
     
     # Otherwise, calculate a new score
-    score = get_relevance_score(story, use_content_extraction=use_content_extraction)
-    
-    # Store the score in the story dictionary for potential later use
-    story['relevance_score'] = score
-    
-    return score >= threshold
+    try:
+        score = get_relevance_score(story, use_content_extraction=use_content_extraction)
+        
+        # Store the score in the story dictionary for potential later use
+        story['relevance_score'] = score
+        
+        return score >= threshold
+    except Exception as e:
+        # If relevance scoring fails, don't modify the story's relevance_score
+        print(f"Could not determine if story {story.get('id')} is interesting: {e}")
+        # Return False as we can't determine if it's interesting
+        return False
 
 @lru_cache(maxsize=128)
 def get_domain_relevance_score(domain: str) -> int:
@@ -230,8 +237,9 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
             return max(0, min(100, score))
         except ValueError:
             return 0
-    except Exception:
-        return 0
+    except Exception as e:
+        print(f"Error calculating domain relevance score for {domain}: {e}")
+        raise
 
 async def get_relevance_score_async(story: Dict[str, Any], use_content_extraction: bool = False) -> int:
     """Asynchronous version of get_relevance_score.
@@ -261,8 +269,10 @@ async def get_relevance_score_async(story: Dict[str, Any], use_content_extractio
                 # (High scoring domains might have irrelevant articles)
                 if domain_score < 30:
                     return domain_score
-            except Exception:
-                # Fall back to full analysis if there's an error
+            except Exception as e:
+                # Fall back to full analysis if there's an error with domain scoring
+                print(f"Domain scoring failed for {domain}, falling back to full analysis: {e}")
+                # Continue with full analysis below
                 pass
     
     # Extract content if enabled and URL is available
@@ -349,9 +359,9 @@ ONLY respond with a single integer between 0 and 100, and nothing else."""
             else:
                 return 0
     except Exception as e:
-        # Log error and default to 0
+        # Log error and raise the exception instead of returning 0
         print(f"Error calculating relevance score asynchronously: {e}")
-        return 0
+        raise
 
 async def process_story_batch_async(stories: List[Dict[str, Any]], throttle_delay: float = 0.2, use_content_extraction: bool = False) -> List[Dict[str, Any]]:
     """Process a batch of stories asynchronously to get relevance scores.
@@ -379,6 +389,9 @@ async def process_story_batch_async(stories: List[Dict[str, Any]], throttle_dela
             story['relevance_score'] = await task
         except Exception as e:
             print(f"Error processing story {story.get('id')}: {e}")
-            story['relevance_score'] = 0
+            # Don't set relevance_score to 0 on API failure - leave it unchanged
+            # Only set it if it doesn't exist yet in the story
+            if 'relevance_score' not in story:
+                story['relevance_score'] = None
     
     return stories

@@ -2,7 +2,7 @@ import requests
 import time
 import asyncio
 import aiohttp
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Tuple, Optional, Any, Union, cast
 
 # Hacker News API base URL
@@ -130,10 +130,10 @@ def is_story_within_timeframe(story: Optional[Dict[str, Any]], hours: int = 24) 
     
     # The story['time'] is a Unix timestamp in seconds (UTC)
     # Convert it to UTC datetime for consistent timezone handling
-    story_time = datetime.utcfromtimestamp(story['time'])
+    story_time = datetime.fromtimestamp(story['time'], tz=timezone.utc)
     
     # Use UTC for the cutoff time as well
-    cutoff_time = datetime.utcnow() - timedelta(hours=hours)
+    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
     
     return story_time >= cutoff_time
 
