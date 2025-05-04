@@ -191,6 +191,7 @@ async def test_score_stories_async(mock_db_path, mock_async_anthropic, monkeypat
         title TEXT NOT NULL,
         url TEXT,
         score INTEGER,
+        comments INTEGER,
         by TEXT NOT NULL,
         time INTEGER NOT NULL,
         timestamp TEXT NOT NULL,
@@ -204,14 +205,15 @@ async def test_score_stories_async(mock_db_path, mock_async_anthropic, monkeypat
     for story in stories:
         cursor.execute('''
         INSERT INTO stories (
-            id, title, url, score, by, time, timestamp, type, last_updated
+            id, title, url, score, comments, by, time, timestamp, type, last_updated
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             story['id'],
             story['title'],
             story['url'],
             story['score'],
+            story.get('comments', 40),  # Default to 40 comments (above threshold)
             story['by'],
             story['time'],
             story['timestamp'],
@@ -228,7 +230,8 @@ async def test_score_stories_async(mock_db_path, mock_async_anthropic, monkeypat
             scored_count = await score_stories_async(
                 hours=24,
                 min_score=10,
-                batch_size=2
+                batch_size=2,
+                min_comments=30
             )
     
     # Should have scored some stories
@@ -253,12 +256,13 @@ def test_show_stories(mock_db_path, monkeypatch):
     
     # Create stories with different qualities
     stories = [
-        # High quality (high HN score, high relevance)
+        # High quality (high HN score, high relevance, many comments)
         {
             "id": 1,
             "title": "High Quality Story",
             "url": "https://example.com/high",
             "score": 100,
+            "comments": 50,  # Added comments field
             "relevance_score": 90,
             "by": "user1",
             "time": int(datetime.now().timestamp()) - 3600,
@@ -272,6 +276,7 @@ def test_show_stories(mock_db_path, monkeypatch):
             "title": "Medium Quality Story",
             "url": "https://example.com/medium",
             "score": 50,
+            "comments": 35,  # Added comments field
             "relevance_score": 70,
             "by": "user2",
             "time": int(datetime.now().timestamp()) - 7200,
@@ -285,6 +290,7 @@ def test_show_stories(mock_db_path, monkeypatch):
             "title": "Low Quality Story",
             "url": "https://example.com/low",
             "score": 30,
+            "comments": 20,  # Below comment threshold
             "relevance_score": 40,
             "by": "user3",
             "time": int(datetime.now().timestamp()) - 10800,
@@ -302,6 +308,7 @@ def test_show_stories(mock_db_path, monkeypatch):
         title TEXT NOT NULL,
         url TEXT,
         score INTEGER,
+        comments INTEGER,
         by TEXT NOT NULL,
         time INTEGER NOT NULL,
         timestamp TEXT NOT NULL,
@@ -315,14 +322,15 @@ def test_show_stories(mock_db_path, monkeypatch):
     for story in stories:
         cursor.execute('''
         INSERT INTO stories (
-            id, title, url, score, by, time, timestamp, type, last_updated, relevance_score
+            id, title, url, score, comments, by, time, timestamp, type, last_updated, relevance_score
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''', (
             story['id'],
             story['title'],
             story['url'],
             story['score'],
+            story['comments'],
             story['by'],
             story['time'],
             story['timestamp'],
@@ -341,7 +349,11 @@ def test_show_stories(mock_db_path, monkeypatch):
         assert isinstance(count, int)  # Just check that it returns an integer
         
         # Test with lower thresholds
-        count = show_stories(min_hn_score=10, min_relevance=30)
+        count = show_stories(min_hn_score=10, min_relevance=30, min_comments=10)
+        assert isinstance(count, int)  # Just check that it returns an integer
+        
+        # Test with higher comment threshold (should only show high quality story)
+        count = show_stories(min_hn_score=10, min_relevance=30, min_comments=40)
         assert isinstance(count, int)  # Just check that it returns an integer
 
 
@@ -378,6 +390,8 @@ def test_cmd_score(monkeypatch):
         hours = 24
         min_score = 30
         batch_size = 10
+        extract_content = False
+        min_comments = 30
     
     # Mock score_stories_async to avoid actual scoring
     mock_score = MagicMock(return_value=7)
@@ -403,6 +417,7 @@ def test_cmd_show(monkeypatch):
         min_score = 30
         min_relevance = 75
         hn_weight = 0.7
+        min_comments = 30
     
     # Mock show_stories to avoid database calls
     mock_show = MagicMock(return_value=5)
@@ -417,7 +432,8 @@ def test_cmd_show(monkeypatch):
         hours=24,
         min_hn_score=30,
         min_relevance=75,
-        hn_weight=0.7
+        hn_weight=0.7,
+        min_comments=30
     )
 
 

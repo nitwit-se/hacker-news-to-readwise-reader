@@ -367,7 +367,7 @@ async def get_filtered_stories_async(source: str = 'top', hours: int = 24, min_s
     # Get story details asynchronously
     all_stories = await get_stories_details_async(story_ids)
     
-    # Filter by time and score
+    # Filter by time, score, and comments
     filtered_stories: List[Dict[str, Any]] = []
     oldest_id: Optional[int] = None
     
@@ -375,6 +375,13 @@ async def get_filtered_stories_async(source: str = 'top', hours: int = 24, min_s
         # Track oldest ID for future reference
         if oldest_id is None or story['id'] < oldest_id:
             oldest_id = story['id']
+            
+        # Get the comment count from 'descendants' field
+        # If not available, default to 0
+        if 'descendants' in story:
+            story['comments'] = story['descendants']
+        else:
+            story['comments'] = 0
             
         # Filter by time and score
         if is_story_within_timeframe(story, hours) and story.get('score', 0) >= min_score:

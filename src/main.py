@@ -22,7 +22,7 @@ from src.api import get_stories_until_cutoff, get_stories_details_async, get_sto
 from src.api import get_filtered_stories_async
 from src.classifier import is_interesting, get_relevance_score
 from src.classifier import process_story_batch_async, get_relevance_score_async
-from src.readwise import batch_add_to_readwise, ReadwiseError
+from src.readwise import batch_add_to_readwise, ReadwiseError, get_all_readwise_urls
 
 def calculate_combined_score(story: Dict[str, Any], hn_weight: float = 0.7) -> float:
     """Calculate a combined score using both HN score and relevance score.
@@ -75,8 +75,10 @@ def format_story(story: Dict[str, Any]) -> str:
     # Create the output string
     output = f"\n{title}\n"
     
-    # Include scores information
+    # Include scores and comment information
     score_info = f"HN Score: {score}"
+    if 'comments' in story:
+        score_info += f" | Comments: {story['comments']}"
     if 'relevance_score' in story and story['relevance_score'] is not None:
         score_info += f" | Relevance: {story['relevance_score']}"
     if 'combined_score' in story:
@@ -140,7 +142,7 @@ async def fetch_stories_async(hours: int = 24, min_score: int = 30, source: str 
     
     return new_count, update_count
 
-async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: int = 10, use_content_extraction: bool = False) -> int:
+async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: int = 10, use_content_extraction: bool = False, min_comments: int = 30) -> int:
     """Calculate relevance scores for unscored stories.
     
     Args:
@@ -148,6 +150,7 @@ async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: 
         min_score (int): Minimum HN score threshold for stories to score
         batch_size (int): Number of stories to process in each batch
         use_content_extraction (bool): Whether to extract and use article content
+        min_comments (int): Minimum number of comments threshold
         
     Returns:
         int: Number of stories scored
@@ -156,7 +159,7 @@ async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: 
     init_db()
     
     # Get batches of unscored stories
-    story_batches = get_unscored_stories_in_batches(hours=hours, min_score=min_score, batch_size=batch_size)
+    story_batches = get_unscored_stories_in_batches(hours=hours, min_score=min_score, batch_size=batch_size, min_comments=min_comments)
     
     if not story_batches:
         print("No unscored stories found that meet the criteria.")
@@ -195,7 +198,7 @@ async def score_stories_async(hours: int = 24, min_score: int = 30, batch_size: 
     print(f"\nCalculated relevance scores for {scored_count} stories and updated database.")
     return scored_count
 
-def show_stories(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75, hn_weight: float = 0.7) -> int:
+def show_stories(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75, hn_weight: float = 0.7, min_comments: int = 30) -> int:
     """Display stories meeting criteria from the database.
     
     Args:
@@ -203,6 +206,7 @@ def show_stories(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 7
         min_hn_score (int): Minimum HN score threshold
         min_relevance (int): Minimum relevance score threshold
         hn_weight (float): Weight to apply to HN score in combined scoring (0.0-1.0)
+        min_comments (int): Minimum number of comments threshold
         
     Returns:
         int: Number of stories displayed
@@ -211,13 +215,13 @@ def show_stories(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 7
     init_db()
     
     # Get stories matching criteria
-    print(f"Finding stories from the past {hours} hours with HN score >= {min_hn_score} and relevance score >= {min_relevance}...")
+    print(f"Finding stories from the past {hours} hours with HN score >= {min_hn_score}, comments >= {min_comments}, and relevance score >= {min_relevance}...")
     
-    # First get all stories with minimum HN score
-    all_stories = get_stories_within_timeframe(hours=hours, min_score=min_hn_score)
+    # First get all stories with minimum HN score and comments
+    all_stories = get_stories_within_timeframe(hours=hours, min_score=min_hn_score, min_comments=min_comments)
     
     if not all_stories:
-        print(f"No stories found with HN score >= {min_hn_score} from the past {hours} hours.")
+        print(f"No stories found with HN score >= {min_hn_score} and comments >= {min_comments} from the past {hours} hours.")
         return 0
     
     # Filter by relevance score
@@ -273,7 +277,8 @@ def cmd_score(args: argparse.Namespace) -> int:
         hours=args.hours,
         min_score=args.min_score,
         batch_size=args.batch_size,
-        use_content_extraction=args.extract_content
+        use_content_extraction=args.extract_content,
+        min_comments=args.min_comments
     ))
     print(f"Done! Calculated relevance scores for {scored_count} stories.")
     return 0
@@ -284,11 +289,12 @@ def cmd_show(args: argparse.Namespace) -> int:
         hours=args.hours,
         min_hn_score=args.min_score,
         min_relevance=args.min_relevance,
-        hn_weight=args.hn_weight
+        hn_weight=args.hn_weight,
+        min_comments=args.min_comments
     )
     return 0
 
-def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75, batch_size: int = 10, max_stories: Optional[int] = None) -> int:
+def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75, batch_size: int = 10, max_stories: Optional[int] = None, min_comments: int = 30) -> int:
     """Sync stories to Readwise Reader with relevance filtering.
     
     Args:
@@ -297,6 +303,7 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
         min_relevance (int): Minimum relevance score threshold (defaults to 75)
         batch_size (int): Number of stories to process in each batch
         max_stories (Optional[int]): Maximum number of stories to sync (useful for testing)
+        min_comments (int): Minimum number of comments threshold (default: 30)
         
     Returns:
         int: Number of stories synced
@@ -305,10 +312,10 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
     init_db()
     
     print(f"Finding unsynced stories from the past {hours} hours with HN score >= {min_hn_score}")
-    print(f"and relevance score >= {min_relevance}...")
+    print(f"comments >= {min_comments} and relevance score >= {min_relevance}...")
     
     # Get unsynced stories matching criteria
-    stories = get_unsynced_stories(hours=hours, min_score=min_hn_score, min_relevance=min_relevance)
+    stories = get_unsynced_stories(hours=hours, min_score=min_hn_score, min_relevance=min_relevance, min_comments=min_comments)
     
     if not stories:
         print("No unsynced stories found matching your criteria.")
@@ -330,11 +337,14 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
     # Fetch all existing URLs from Readwise Reader once at the start
     try:
         print("Fetching all documents from Readwise Reader...")
-        from src.readwise import get_all_readwise_urls
         existing_urls = get_all_readwise_urls()
         print(f"Found {len(existing_urls)} documents in Readwise Reader")
+    except ReadwiseError as e:
+        print(f"Failed to fetch existing URLs from Readwise Reader: {e}")
+        print("Will continue without pre-checking for duplicates.")
+        existing_urls = set()
     except Exception as e:
-        print(f"Failed to fetch existing URLs: {e}")
+        print(f"Unexpected error when fetching URLs from Readwise Reader: {e}")
         print("Will continue without pre-checking for duplicates.")
         existing_urls = set()
     
@@ -362,17 +372,35 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
             if batch_failed_ids:
                 failed_ids.extend(batch_failed_ids)
                 print(f"Failed to sync {len(batch_failed_ids)} stories in this batch.")
+                # Display the detailed errors for failed syncs
+                for story_id, error_msg in batch_failed_ids:
+                    print(f"  - Story ID {story_id}: {error_msg}")
                 
             # Pause between batches
             if batch_num < total_batches:
                 print("Pausing briefly before next batch...")
                 time.sleep(2)  # Increased pause time to avoid rate limiting
                 
-        except Exception as e:
-            print(f"Error syncing with Readwise: {e}")
+        except ReadwiseError as e:
+            # Specific Readwise API error
+            error_msg = f"Readwise API error: {e}"
+            print(error_msg)
             # Add all batch IDs to failed list
             for story in batch:
-                failed_ids.append((story.get('id'), str(e)))
+                failed_ids.append((story.get('id'), error_msg))
+        except ValueError as e:
+            # Value error (likely data format issues)
+            error_msg = f"Data format error: {e}"
+            print(error_msg)
+            for story in batch:
+                failed_ids.append((story.get('id'), error_msg))
+        except Exception as e:
+            # Catch-all for unexpected errors
+            error_msg = f"Unexpected error: {e}"
+            print(error_msg)
+            # Add all batch IDs to failed list
+            for story in batch:
+                failed_ids.append((story.get('id'), error_msg))
     
     # Update the last sync time
     if synced_count > 0:
@@ -381,7 +409,23 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
     # Final stats
     print(f"\nSynced {synced_count} stories to Readwise Reader.")
     if failed_ids:
-        print(f"Failed to sync {len(failed_ids)} stories.")
+        print(f"Failed to sync {len(failed_ids)} stories:")
+        # Group failures by error message to avoid repetitive output
+        error_groups = {}
+        for story_id, error_msg in failed_ids:
+            if error_msg not in error_groups:
+                error_groups[error_msg] = []
+            error_groups[error_msg].append(story_id)
+        
+        # Display grouped errors
+        for error_msg, story_ids in error_groups.items():
+            if len(story_ids) > 3:
+                # For many failures with the same error, just show the count and a few examples
+                print(f"  - {len(story_ids)} stories failed with: {error_msg}")
+                print(f"    Example IDs: {', '.join(str(id) for id in story_ids[:3])}...")
+            else:
+                # For a few failures, show all IDs
+                print(f"  - Story IDs {', '.join(str(id) for id in story_ids)}: {error_msg}")
         
     # Show sync stats
     stats = get_readwise_sync_stats()
@@ -418,7 +462,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
         min_hn_score=args.min_score,
         min_relevance=min_relevance,
         batch_size=batch_size,
-        max_stories=args.max_stories
+        max_stories=args.max_stories,
+        min_comments=args.min_comments
     )
     
     if synced_count > 0:
@@ -449,6 +494,8 @@ def main() -> int:
                             help='Number of hours to look back (default: 24)')
     common_parser.add_argument('--min-score', type=int, default=30,
                             help='Minimum HN score threshold (default: 30)')
+    common_parser.add_argument('--min-comments', type=int, default=30,
+                            help='Minimum number of comments threshold (default: 30)')
     
     # 'fetch' command
     fetch_parser = subparsers.add_parser('fetch', parents=[common_parser],
@@ -504,6 +551,7 @@ def main() -> int:
             args.min_score = 30  # Default min score
             args.min_relevance = 75  # Default min relevance
             args.hn_weight = 0.7  # Default HN weight
+            args.min_comments = 30  # Default min comments
             return cmd_show(args)
         
         # Otherwise, run the appropriate command

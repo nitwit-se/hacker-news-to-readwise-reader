@@ -16,6 +16,7 @@ CREATE TABLE stories (
     title TEXT NOT NULL,
     url TEXT,
     score INTEGER,
+    comments INTEGER,
     by TEXT NOT NULL,
     time INTEGER NOT NULL,
     timestamp TEXT NOT NULL,
@@ -33,6 +34,7 @@ The `stories` table stores all Hacker News stories with their associated metadat
 - `title`: The title of the story
 - `url`: The URL of the story (may be null for "Ask HN" posts)
 - `score`: The current score/points of the story
+- `comments`: The number of comments on the story (from Hacker News API's 'descendants' field)
 - `by`: The username of the story submitter
 - `time`: The Unix timestamp of the story submission
 - `timestamp`: The formatted timestamp of when the story was added to our database
@@ -69,6 +71,7 @@ The `metadata` table stores application-level metadata, such as the last time st
 SELECT * FROM stories 
 WHERE time >= (strftime('%s', 'now') - 24*60*60)
 AND score >= 30
+AND comments >= 30
 ORDER BY score DESC
 ```
 
@@ -78,6 +81,7 @@ ORDER BY score DESC
 SELECT * FROM stories 
 WHERE time >= (strftime('%s', 'now') - 24*60*60)
 AND score >= 30
+AND comments >= 30
 AND relevance_score >= 75
 ORDER BY relevance_score DESC, score DESC
 ```
@@ -88,6 +92,7 @@ ORDER BY relevance_score DESC, score DESC
 SELECT * FROM stories 
 WHERE relevance_score IS NULL
 AND score >= 30
+AND comments >= 30
 ORDER BY score DESC
 ```
 
