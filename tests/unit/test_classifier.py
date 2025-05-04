@@ -5,6 +5,7 @@ Unit tests for src.classifier module.
 import pytest
 import asyncio
 import importlib.util
+import os
 from typing import List, Dict, Any
 
 # Check if the classifier module exists before importing
@@ -15,7 +16,8 @@ if classifier_module_exists:
     from src.classifier import (
         get_relevance_score, is_interesting, 
         get_domain_relevance_score, get_relevance_score_async,
-        process_story_batch_async
+        process_story_batch_async, load_prompt_template,
+        STORY_PROMPT_TEMPLATE, DOMAIN_PROMPT_TEMPLATE
     )
 
 from tests.fixtures.mock_anthropic import mock_anthropic, mock_async_anthropic
@@ -24,6 +26,48 @@ from tests.fixtures.mock_anthropic import mock_anthropic, mock_async_anthropic
 pytestmark = pytest.mark.skip(
     reason="classifier tests are examples only and depend on the specific implementation"
 )
+
+# Create test fixture for temporary prompt files
+@pytest.fixture
+def temp_prompt_files(tmp_path):
+    """Create temporary prompt template files for testing."""
+    # Create a temporary directory for prompts
+    prompts_dir = tmp_path / "prompts"
+    prompts_dir.mkdir()
+    
+    # Create a test story prompt file
+    story_file = prompts_dir / "story_test.txt"
+    story_file.write_text("Test story prompt template")
+    
+    # Create a test domain prompt file
+    domain_file = prompts_dir / "domain_test.txt"
+    domain_file.write_text("Test domain prompt template")
+    
+    return {
+        "prompts_dir": prompts_dir,
+        "story_file": story_file,
+        "domain_file": domain_file
+    }
+
+@pytest.mark.unit
+def test_load_prompt_template(temp_prompt_files):
+    """Test loading prompt templates from files."""
+    if not classifier_module_exists:
+        pytest.skip("Classifier module not available")
+    
+    # Test loading an existing template
+    story_template = load_prompt_template(
+        str(temp_prompt_files["story_file"]), 
+        "Default story template"
+    )
+    assert story_template == "Test story prompt template"
+    
+    # Test loading a non-existent template (should fall back to default)
+    non_existent = load_prompt_template(
+        str(temp_prompt_files["prompts_dir"] / "nonexistent.txt"),
+        "Default fallback template"
+    )
+    assert non_existent == "Default fallback template"
 
 
 @pytest.mark.unit

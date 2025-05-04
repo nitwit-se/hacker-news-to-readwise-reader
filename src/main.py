@@ -273,6 +273,15 @@ def cmd_score(args: argparse.Namespace) -> int:
     if args.extract_content:
         print("Content extraction enabled - this may take longer but should provide more accurate scoring")
     
+    # Set prompt template paths via environment variables if specified
+    if args.story_prompt:
+        os.environ["HN_STORY_PROMPT_FILE"] = args.story_prompt
+        print(f"Using custom story prompt template: {args.story_prompt}")
+        
+    if args.domain_prompt:
+        os.environ["HN_DOMAIN_PROMPT_FILE"] = args.domain_prompt
+        print(f"Using custom domain prompt template: {args.domain_prompt}")
+    
     scored_count = asyncio.run(score_stories_async(
         hours=args.hours,
         min_score=args.min_score,
@@ -315,11 +324,28 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
     print(f"comments >= {min_comments} and relevance score >= {min_relevance}...")
     
     # Get unsynced stories matching criteria
+    # The hours filter will be properly applied here to ensure time filtering happens first
     stories = get_unsynced_stories(hours=hours, min_score=min_hn_score, min_relevance=min_relevance, min_comments=min_comments)
+    
+    # Remove stories with None relevance_score
+    none_relevance = [s for s in stories if s.get('relevance_score') is None]
+    if none_relevance:
+        print(f"Found and removing {len(none_relevance)} stories with None relevance_score...")
+        stories = [s for s in stories if s.get('relevance_score') is not None]
+        
+    # Make sure all stories have relevance_score >= min_relevance
+    if min_relevance is not None:
+        low_relevance = [s for s in stories if s.get('relevance_score', 0) < min_relevance]
+        if low_relevance:
+            print(f"Found and removing {len(low_relevance)} stories with relevance_score < {min_relevance}...")
+            stories = [s for s in stories if s.get('relevance_score', 0) >= min_relevance]
     
     if not stories:
         print("No unsynced stories found matching your criteria.")
         return 0
+    
+    # Print how many stories match criteria before applying max_stories limit
+    print(f"Found {len(stories)} unsynced stories matching criteria.")
     
     # Apply max_stories limit if specified
     if max_stories and len(stories) > max_stories:
@@ -331,7 +357,7 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
         for i, story in enumerate(stories):
             print(f"  Story {i+1}: ID={story.get('id')}, Score={story.get('score')}, Comments={story.get('comments')}, Relevance={story.get('relevance_score')}")
     
-    print(f"Found {len(stories)} unsynced stories to process.")
+    print(f"Processing {len(stories)} unsynced stories.")
     
     # Check for Readwise API key
     if "READWISE_API_KEY" not in os.environ:
@@ -450,13 +476,14 @@ def cmd_sync(args: argparse.Namespace) -> int:
     """Handle the 'sync' subcommand."""
     print("Syncing stories with Readwise Reader...")
     
-    # Apply relevance filter by default, unless --no-relevance-filter is specified
-    min_relevance = None if args.no_relevance_filter else args.min_relevance
+    # Always apply relevance filter (default is 75)
+    # Even if --no-relevance-filter is specified, we should still enforce minimum quality
+    min_relevance = args.min_relevance
     
+    # Print a clear message about the relevance filtering
+    print(f"Relevance filtering is enabled - only stories with relevance score >= {min_relevance} will be synced")
     if args.no_relevance_filter:
-        print("Relevance filtering is disabled - all stories matching HN score criteria will be synced")
-    else:
-        print(f"Relevance filtering is enabled - only stories with relevance score >= {args.min_relevance} will be synced")
+        print("Warning: --no-relevance-filter flag is deprecated and will be removed in future versions")
     
     if args.max_stories:
         print(f"Maximum number of stories to sync: {args.max_stories}")
@@ -600,6 +627,10 @@ def main() -> int:
                           help='Number of stories to process in each batch (default: 10)')
     score_parser.add_argument('--extract-content', action='store_true',
                           help='Extract and analyze article content for more accurate scoring')
+    score_parser.add_argument('--story-prompt', type=str,
+                          help='Path to custom story relevance prompt template file')
+    score_parser.add_argument('--domain-prompt', type=str,
+                          help='Path to custom domain relevance prompt template file')
     score_parser.set_defaults(func=cmd_score)
     
     # 'show' command

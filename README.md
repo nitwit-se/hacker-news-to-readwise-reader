@@ -121,6 +121,9 @@ Score Options:
 - `--hours N`: Specify how many hours back to look for unscored stories (default: 24)
 - `--min-score N`: Only score stories with at least this HN score (default: 30)
 - `--batch-size N`: Number of stories to process in each batch (default: 10)
+- `--extract-content`: Extract and analyze article content for more accurate scoring
+- `--story-prompt PATH`: Path to custom story relevance prompt template file
+- `--domain-prompt PATH`: Path to custom domain relevance prompt template file
 
 ### Show Command: Display filtered stories
 
@@ -264,9 +267,9 @@ When adding new features, please include appropriate tests to maintain code qual
 
 ## Personalized Relevance Scoring
 
-When using the scoring feature, the application leverages Claude AI to calculate relevance scores for stories:
+When using the scoring feature, the application leverages Claude AI to calculate relevance scores for stories based on the prompt templates in the `prompts/` directory.
 
-- Current interest categories:
+- Default interest categories (defined in `prompts/story_relevance.txt`):
   - Programming and software development
   - AI, machine learning, and LLMs
   - Linux, Emacs, NixOS
@@ -281,13 +284,40 @@ When using the scoring feature, the application leverages Claude AI to calculate
   - Cool toys and gadgets
   - Climate Change and Mitigation
 
-To customize these interests, edit the system prompt in `src/classifier.py`.
+To customize these interests, edit the template files in the `prompts/` directory or create your own custom templates and use them with the `--story-prompt` and `--domain-prompt` options.
 
 Each story receives a relevance score from 0-100 indicating how well it matches your interests:
 - 0-25: Not relevant
 - 26-50: Slightly relevant
 - 51-75: Moderately relevant
 - 76-100: Highly relevant
+
+### Customizing Prompt Templates
+
+The application now supports customizable prompt templates for Claude AI classification. This allows you to tailor the interest categories to your own preferences without modifying code:
+
+1. **Default template files** are located in the `prompts/` directory:
+   - `story_relevance.txt`: Template for classifying stories
+   - `domain_relevance.txt`: Template for classifying domains
+
+2. **Using custom templates**:
+   ```bash
+   # Use custom prompt templates with the score command
+   hn-poll score --story-prompt /path/to/your/story_template.txt --domain-prompt /path/to/your/domain_template.txt
+   ```
+
+3. **Environment variables**:
+   You can also set these paths using environment variables:
+   ```bash
+   export HN_STORY_PROMPT_FILE=/path/to/your/story_template.txt
+   export HN_DOMAIN_PROMPT_FILE=/path/to/your/domain_template.txt
+   hn-poll score
+   ```
+
+4. **Template guidelines**:
+   - Keep the format consistent - the template should instruct Claude to return a single integer between 0-100
+   - Maintain clear interest categories that Claude can evaluate against
+   - Edit the examples of interests/non-interests to match your preferences
 
 **Key advantages of the relevance score system:**
 - Scores are persisted in the database, minimizing redundant API calls

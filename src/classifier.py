@@ -1,6 +1,7 @@
 import os
 import asyncio
 import time
+import pathlib
 from functools import lru_cache
 from typing import List, Dict, Tuple, Optional, Any, Union, cast
 from anthropic import Anthropic, AsyncAnthropic
@@ -12,6 +13,112 @@ async_client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 # Import our content extractor
 import asyncio
 from src.content_extractor import extract_content_from_url
+
+# Default locations for prompt templates
+DEFAULT_PROMPTS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "prompts")
+STORY_PROMPT_FILE = os.environ.get("HN_STORY_PROMPT_FILE", os.path.join(DEFAULT_PROMPTS_DIR, "story_relevance.txt"))
+DOMAIN_PROMPT_FILE = os.environ.get("HN_DOMAIN_PROMPT_FILE", os.path.join(DEFAULT_PROMPTS_DIR, "domain_relevance.txt"))
+
+# Default prompt templates as fallbacks
+DEFAULT_STORY_PROMPT = """I am the CTO for a post series-A startup with a SaaS product modelling climate mitigation plans for cities. As CTO it is my job to stay on top of all relevant news for my job, as well as nurturing my technical / hacker interests.
+
+You are my personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based on the information provided, which may include title, URL, and article content.
+
+To help you make a judgement here are some examples of things that interest me as well as things that I know do not interest me. These are examples.
+
+MY INTERESTS:
+- Programming and software development
+- AI, machine learning, and LLMs
+- Linux, Emacs, NixOS
+- Computer science theory and algorithms
+- Cybersecurity, hacking techniques, and security vulnerabilities
+- Science fiction concepts and technology
+- Hardware hacking and electronics
+- Systems programming and low-level computing
+- Novel computing paradigms and research
+- Tech history and vintage computing
+- Mathematics and computational theory
+- Cool toys and gadgetst
+- Climate Change and Mitigation
+
+NOT MY INTERESTS:
+- Business/startup funding news
+- Tech company stock prices or financial performance
+- Product announcements (unless truly innovative)
+- General tech industry news without technical depth
+- Political news (unless directly related to technology policy or climate change)
+- General mainstream technology coverage
+
+Rate the story's relevance to these interests on a scale from 0-100, where 0 would be completely uninteresting and 100 would be almost guaranteed to be of interest to me personally or for my work as CTO.
+
+ONLY respond with a single integer between 0 and 100, and nothing else."""
+
+DEFAULT_DOMAIN_PROMPT = """Evaluate how strongly this website domain would match the following interest categories:
+
+1. Technology & Tools:
+   - Emacs, Linux, NixOS, MacOS, Apple hardware
+   - E-book readers and related technology
+
+2. Programming & Computer Science:
+   - Python, Julia, Lisp
+   - Functional programming, logic programming
+   - Any interesting programming language concepts
+
+3. Security & Hacking:
+   - Infosec, cybersecurity, penetration testing
+   - Ethical hacking, cracking (in educational context)
+   - Security research, vulnerabilities
+
+4. Projects & Creativity:
+   - DIY/home projects with technology
+   - Creative coding, generative art
+   - Hardware hacking, electronics
+
+5. Science & Research:
+   - AI, machine learning, LLMs
+   - Climate change, environmental tech
+   - Scientific computing
+
+6. Books & Reading:
+   - Technical books, programming books
+   - E-book technology, digital reading
+
+Rate the domain's relevance to these interests on a scale from 0-100, where:
+- 0-25: Not relevant to these interests
+- 26-50: Slightly relevant to these interests
+- 51-75: Moderately relevant to these interests
+- 76-100: Highly relevant to these interests
+
+ONLY respond with a single integer between 0 and 100, and nothing else."""
+
+def load_prompt_template(file_path: str, default_template: str) -> str:
+    """Load a prompt template from a file, with fallback to default template.
+    
+    Args:
+        file_path (str): Path to the prompt template file
+        default_template (str): Default template to use if file cannot be loaded
+        
+    Returns:
+        str: The loaded template or default if file cannot be loaded
+    """
+    try:
+        if os.path.exists(file_path):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                template = f.read()
+                print(f"Loaded prompt template from {file_path}")
+                return template
+        else:
+            print(f"WARNING: Prompt template file {file_path} not found. Using built-in default template.")
+            print("If you intended to use a custom prompt file, please check the file path.")
+            return default_template
+    except Exception as e:
+        print(f"ERROR: Failed to load prompt template from {file_path}: {e}")
+        print("Using built-in default template instead. If you intended to use a custom prompt file, please check the file permissions and format.")
+        return default_template
+
+# Load prompt templates when module is imported
+STORY_PROMPT_TEMPLATE = load_prompt_template(STORY_PROMPT_FILE, DEFAULT_STORY_PROMPT)
+DOMAIN_PROMPT_TEMPLATE = load_prompt_template(DOMAIN_PROMPT_FILE, DEFAULT_DOMAIN_PROMPT)
 
 def get_relevance_score(story: Dict[str, Any], use_content_extraction: bool = False) -> int:
     """Calculate a relevance score for how well a HN story matches user interests.
@@ -181,44 +288,8 @@ def get_domain_relevance_score(domain: str) -> int:
     # Simple domain-based prompt
     prompt = f"Domain: {domain}"
     
-    # Use the same system prompt as the main function
-    system_prompt = """Evaluate how strongly this website domain would match the following interest categories:
-
-1. Technology & Tools:
-   - Emacs, Linux, NixOS, MacOS, Apple hardware
-   - E-book readers and related technology
-
-2. Programming & Computer Science:
-   - Python, Julia, Lisp
-   - Functional programming, logic programming
-   - Any interesting programming language concepts
-
-3. Security & Hacking:
-   - Infosec, cybersecurity, penetration testing
-   - Ethical hacking, cracking (in educational context)
-   - Security research, vulnerabilities
-
-4. Projects & Creativity:
-   - DIY/home projects with technology
-   - Creative coding, generative art
-   - Hardware hacking, electronics
-
-5. Science & Research:
-   - AI, machine learning, LLMs
-   - Climate change, environmental tech
-   - Scientific computing
-
-6. Books & Reading:
-   - Technical books, programming books
-   - E-book technology, digital reading
-
-Rate the domain's relevance to these interests on a scale from 0-100, where:
-- 0-25: Not relevant to these interests
-- 26-50: Slightly relevant to these interests
-- 51-75: Moderately relevant to these interests
-- 76-100: Highly relevant to these interests
-
-ONLY respond with a single integer between 0 and 100, and nothing else."""
+    # Use the loaded domain prompt template
+    system_prompt = DOMAIN_PROMPT_TEMPLATE
     
     try:
         message = client.messages.create(
@@ -294,39 +365,8 @@ async def get_relevance_score_async(story: Dict[str, Any], use_content_extractio
     if article_content:
         prompt += f"\n\nArticle Content:\n{article_content}"
     
-    # Interest categories defined in the system prompt
-    system_prompt = """I am the CTO for a post series-A startup with a SaaS product modelling climate mitigation plans for cities. As CTO it is my job to stay on top of all relevant news for my job, as well as nurturing my technical / hacker interests.
-
-You are my personal content classifier for Hacker News stories. Your task is to determine if a story is likely to be of interest to me based on the information provided, which may include title, URL, and article content.
-
-To help you make a judgement here are some examples of things that interest me as well as things that I know do not interest me. These are examples.
-
-MY INTERESTS:
-- Programming and software development
-- AI, machine learning, and LLMs
-- Linux, Emacs, NixOS
-- Computer science theory and algorithms
-- Cybersecurity, hacking techniques, and security vulnerabilities
-- Science fiction concepts and technology
-- Hardware hacking and electronics
-- Systems programming and low-level computing
-- Novel computing paradigms and research
-- Tech history and vintage computing
-- Mathematics and computational theory
-- Cool toys and gadgetst
-- Climate Change and Mitigation
-
-NOT MY INTERESTS:
-- Business/startup funding news
-- Tech company stock prices or financial performance
-- Product announcements (unless truly innovative)
-- General tech industry news without technical depth
-- Political news (unless directly related to technology policy or climate change)
-- General mainstream technology coverage
-
-Rate the story's relevance to these interests on a scale from 0-100, where 0 would be completely uninteresting and 100 would be almost guaranteed to be of interest to me personally or for my work as CTO.
-
-ONLY respond with a single integer between 0 and 100, and nothing else."""
+    # Use the loaded story prompt template
+    system_prompt = STORY_PROMPT_TEMPLATE
     
     # Call Claude API to classify
     try:

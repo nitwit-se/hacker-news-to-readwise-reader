@@ -27,6 +27,7 @@ This project is a high-performance Python application that polls the Hacker News
   - `main.py`: Main program logic and command-line interface
   - `classifier.py`: Claude AI integration for interest-based filtering
   - `content_extractor.py`: Extracts content from web pages using Playwright and Trafilatura
+  - `readwise.py`: Integrates with Readwise Reader API for syncing interesting stories
 - `tests/`: Test suite
   - `unit/`: Unit tests for individual modules
   - `integration/`: Integration tests for component interaction
@@ -64,6 +65,16 @@ uv run python -m src.main --claude
 
 # Use content extraction for more accurate relevance scoring
 uv run python -m src.main score --extract-content
+
+# Use custom prompt templates for personalized interest matching
+uv run python -m src.main score --story-prompt /path/to/your_interests.txt
+
+# Sync high-quality stories to Readwise Reader
+export READWISE_API_KEY=your_api_key_here
+uv run python -m src.main sync
+
+# Sync with custom settings
+uv run python -m src.main sync --hours 48 --min-score 5 --min-relevance 50
 ```
 
 ### Testing
@@ -121,6 +132,13 @@ uv run pytest tests/unit/test_api.py
    - Scores are combined on a scale of 0-100 for consistent comparison
 
 7. **Console Output**: High-quality stories are formatted and displayed to the console, sorted by combined score.
+
+8. **Readwise Reader Integration (Optional)**: When using the `sync` command:
+   - High-quality stories filtered by the same criteria as the `show` command are synced to Readwise Reader
+   - The application checks if a URL already exists in Readwise Reader before adding it
+   - Synced stories are tracked in the database to prevent re-adding deleted items
+   - Syncing requires a Readwise Reader API key set as the `READWISE_API_KEY` environment variable
+   - Supports customizable filtering parameters like time, score, and relevance thresholds
 
 ## Development Notes
 
@@ -193,6 +211,9 @@ Potential improvements to consider:
 - Add user configuration file for persistent settings
 - Improve test coverage and add more edge case tests
 - Improve Claude AI integration with response caching
-- Add ability to customize interest categories via configuration file
+- Add ability to customize interest categories via prompt template files (✓ implemented)
 - Create visualization of story score trends over time
 - Enhance content extraction with configuration options for timeout and processing settings
+- Add support for auto-tagging Readwise Reader entries based on content
+- Implement a two-way sync with Readwise Reader (fetch read/archived status)
+- Add a scheduled mode to automatically sync at regular intervals
