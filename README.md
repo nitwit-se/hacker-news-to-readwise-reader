@@ -323,7 +323,8 @@ Sync Options:
 - `--min-score N`: Minimum HN score threshold (default: 30)
 - `--min-relevance N`: Minimum relevance score threshold (default: 75)
 - `--batch-size N`: Number of stories to process in each batch (default: 10)
-- `--use-relevance`: Enable relevance filtering (default: True)
+- `--max-stories N`: Maximum number of stories to sync (useful for testing)
+- `--no-relevance-filter`: Disable relevance filtering (not recommended)
 
 ## Typical Workflow
 
@@ -363,6 +364,12 @@ A typical workflow might look like this:
    
    # Sync stories with custom thresholds
    hn-poll sync --min-score 50 --min-relevance 80
+   
+   # Sync all stories regardless of relevance (not recommended)
+   hn-poll sync --no-relevance-filter
+   
+   # Limit the number of stories to sync (useful for testing)
+   hn-poll sync --max-stories 5
    ```
 
 This separation of concerns allows for more efficient API usage and clearer operation.

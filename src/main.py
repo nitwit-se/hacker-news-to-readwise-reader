@@ -288,14 +288,15 @@ def cmd_show(args: argparse.Namespace) -> int:
     )
     return 0
 
-def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: Optional[int] = 75, batch_size: int = 10) -> int:
-    """Sync stories to Readwise Reader.
+def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: int = 75, batch_size: int = 10, max_stories: Optional[int] = None) -> int:
+    """Sync stories to Readwise Reader with relevance filtering.
     
     Args:
         hours (int): Number of hours to look back
         min_hn_score (int): Minimum HN score threshold
-        min_relevance (Optional[int]): Minimum relevance score threshold
+        min_relevance (int): Minimum relevance score threshold (defaults to 75)
         batch_size (int): Number of stories to process in each batch
+        max_stories (Optional[int]): Maximum number of stories to sync (useful for testing)
         
     Returns:
         int: Number of stories synced
@@ -304,8 +305,7 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: O
     init_db()
     
     print(f"Finding unsynced stories from the past {hours} hours with HN score >= {min_hn_score}")
-    if min_relevance is not None:
-        print(f"and relevance score >= {min_relevance}...")
+    print(f"and relevance score >= {min_relevance}...")
     
     # Get unsynced stories matching criteria
     stories = get_unsynced_stories(hours=hours, min_score=min_hn_score, min_relevance=min_relevance)
@@ -314,7 +314,12 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: O
         print("No unsynced stories found matching your criteria.")
         return 0
     
-    print(f"Found {len(stories)} unsynced stories.")
+    # Apply max_stories limit if specified
+    if max_stories and len(stories) > max_stories:
+        print(f"Limiting to {max_stories} stories (out of {len(stories)} found)")
+        stories = stories[:max_stories]
+    
+    print(f"Found {len(stories)} unsynced stories to process.")
     
     # Check for Readwise API key
     if "READWISE_API_KEY" not in os.environ:
@@ -392,8 +397,16 @@ def cmd_sync(args: argparse.Namespace) -> int:
     """Handle the 'sync' subcommand."""
     print("Syncing stories with Readwise Reader...")
     
-    # If relevance filter is disabled, set min_relevance to None
-    min_relevance = args.min_relevance if args.use_relevance else None
+    # Apply relevance filter by default, unless --no-relevance-filter is specified
+    min_relevance = None if args.no_relevance_filter else args.min_relevance
+    
+    if args.no_relevance_filter:
+        print("Relevance filtering is disabled - all stories matching HN score criteria will be synced")
+    else:
+        print(f"Relevance filtering is enabled - only stories with relevance score >= {args.min_relevance} will be synced")
+    
+    if args.max_stories:
+        print(f"Maximum number of stories to sync: {args.max_stories}")
     
     # Ensure reasonable batch size to avoid rate limiting
     batch_size = min(args.batch_size, 5)
@@ -404,7 +417,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
         hours=args.hours,
         min_hn_score=args.min_score,
         min_relevance=min_relevance,
-        batch_size=batch_size
+        batch_size=batch_size,
+        max_stories=args.max_stories
     )
     
     if synced_count > 0:
@@ -470,9 +484,11 @@ def main() -> int:
                          help='Minimum relevance score threshold (default: 75)')
     sync_parser.add_argument('--batch-size', type=int, default=10,
                          help='Number of stories to process in each batch (default: 10)')
-    sync_parser.add_argument('--use-relevance', action='store_true',
-                         help='Enable relevance filtering (default: True)')
-    sync_parser.set_defaults(func=cmd_sync, use_relevance=True)
+    sync_parser.add_argument('--max-stories', type=int,
+                         help='Maximum number of stories to sync (useful for testing)')
+    sync_parser.add_argument('--no-relevance-filter', action='store_true',
+                         help='Disable relevance filtering (by default, only stories with relevance scores >= min-relevance are synced)')
+    sync_parser.set_defaults(func=cmd_sync)
     
     # Parse arguments
     args = parser.parse_args()

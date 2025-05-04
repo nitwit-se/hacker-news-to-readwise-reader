@@ -153,3 +153,25 @@ def get_test_db_connection(db_path: str) -> sqlite3.Connection:
     connection = sqlite3.connect(db_path)
     connection.row_factory = sqlite3.Row
     return connection
+
+
+def ensure_readwise_columns(db_connection: sqlite3.Connection) -> None:
+    """
+    Ensure the database has Readwise-related columns.
+    
+    Args:
+        db_connection: SQLite database connection
+    """
+    cursor = db_connection.cursor()
+    
+    # Check if columns exist and add them if not
+    cursor.execute("PRAGMA table_info(stories)")
+    columns = [column[1] for column in cursor.fetchall()]
+    
+    if 'readwise_synced' not in columns:
+        cursor.execute("ALTER TABLE stories ADD COLUMN readwise_synced INTEGER DEFAULT 0")
+    
+    if 'readwise_sync_time' not in columns:
+        cursor.execute("ALTER TABLE stories ADD COLUMN readwise_sync_time TEXT")
+    
+    db_connection.commit()
