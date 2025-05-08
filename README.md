@@ -1,21 +1,15 @@
 # Hacker News Poller
 
-A high-performance Python application that polls Hacker News for high-quality stories, displaying them in the console. The application can fetch from top, best, or new story feeds and filter by time and score. Story data is stored in a SQLite database for tracking and filtering purposes.
+A Python application that polls Hacker News for stories based on your interests. It fetches stories from top, best, or new feeds, filters them by time and score, and can optionally use Claude AI to rank story relevance to your personal interests. The application maintains state in a SQLite database to track stories, avoid duplicates, and preserve relevance scores between runs. Stories can be displayed in the console or synced to Readwise Reader.
 
 ## Features
 
-- Efficiently retrieves high-quality stories directly from Hacker News API
-- Choose between top, best, or new story feeds
-- Processes up to 500 stories in a single request with asynchronous processing
-- Tracks and updates story scores over time
-- Filters stories by age (default 24 hours) and quality (default score ≥ 30)
-- Uses asynchronous requests with high concurrency for optimal performance
-- Stores and updates story data in a local SQLite database
-- Intelligently tracks processed stories to minimize redundant fetching
-- Claude AI-powered personalized filtering based on your interests
-- Smart scoring system that combines HN score and relevance score with configurable weights
-- Comprehensive Python type hints throughout the codebase for improved maintainability
-- Integration with Readwise Reader for saving high-quality stories
+- Retrieves stories from Hacker News API (top, best, or new feeds)
+- Filters stories by age and score
+- Stores story data in a local SQLite database
+- Optional Claude AI integration for personalized filtering based on your interests
+- Combines HN score and relevance score with configurable weights
+- Integration with Readwise Reader for saving filtered stories
 
 ## Requirements
 
@@ -146,79 +140,37 @@ Show Options:
 
 ## How It Works
 
-The program operates in three distinct modes, each with its own responsibilities:
+The program operates in three main modes:
 
 ### 1. Data Collection (Fetch)
 
-The `fetch` command is responsible for:
-- Getting story data from the Hacker News API
-- Filtering by timeframe and score
-- Saving new stories to the database
-- Updating existing stories
-- Optimizing future runs by tracking metadata
+The `fetch` command gets story data from the Hacker News API, filters by timeframe and score, and saves stories to the database.
 
 ### 2. Relevance Scoring (Score)
 
-The `score` command:
-- Retrieves unscored stories from the database
-- Sends each story to Claude AI for relevance evaluation
-- Calculates a relevance score (0-100) indicating how well it matches your interests
-- Stores the relevance scores in the database
-- Processes in configurable batch sizes to manage API usage
+The `score` command sends unscored stories to Claude AI for relevance evaluation, calculating a score (0-100) that indicates how well each story matches your interests.
 
 ### 3. Display (Show)
 
-The `show` command:
-- Queries the database for stories meeting criteria
-- Filters by both HN score and relevance score
-- Calculates a combined score based on both HN score and relevance score
-- Normalizes HN scores with logarithmic scaling to reduce the impact of extremely high scores
-- Allows adjusting weight between HN score and relevance score with `--hn-weight`
-- Sorts results by combined score for optimal story ranking
-- Displays formatted output in the console with all scores
+The `show` command queries the database for stories meeting your criteria, filters by both HN score and relevance score, and displays results sorted by a combined score.
 
 ## Database
 
-The application uses SQLite3 to store:
+The application uses SQLite3 to store story details and metadata. The database file (`hn_stories.db`) is created in the same directory as the script.
 
-- Story details including:
-  - ID, title, URL, score, author, timestamp, last updated time
-  - Relevance score (0-100, indicating how relevant the story is to user interests)
-- Metadata such as:
-  - Last poll time
-  - Last oldest ID processed (for optimization)
+See [Database Schema](docs/db_schema.md) for more details.
 
-The database file (`hn_stories.db`) is created in the same directory as the script.
+## Implementation Notes
 
-See [Database Schema](docs/db_schema.md) for more details on the database structure.
-
-## Performance Considerations
-
-- Direct fetching of pre-filtered story lists (top/best) for optimal performance
-- High-concurrency asynchronous processing for simultaneous story retrieval
-- Single pass processing eliminates the need for batch processing
-- Rate limiting and error handling for API reliability
-- Tracking the oldest ID processed minimizes redundant processing
-- Early filtering reduces database operations and memory usage
-- Optimized for fast execution even with large numbers of stories
-- The application is designed to be run periodically (e.g., hourly or daily)
+- Uses asynchronous processing for story retrieval
+- Implements rate limiting and error handling for API reliability
+- Tracks previously processed stories to avoid redundant operations
+- Applies filtering to reduce database operations
+- Designed to be run periodically (e.g., hourly or daily)
 
 ## Type Hints
 
-This project uses Python's type hint system throughout the codebase:
-
-- All functions include parameter and return type annotations
-- Container types specify their element types (e.g., `List[Dict[str, Any]]`)
-- Proper handling of optional values with `Optional[T]`
-- Consistent type annotations across all modules
-
-Benefits of the type annotations:
-- Self-documenting code that clearly shows expected inputs and outputs
-- Enhanced IDE support with autocompletion and real-time error detection
-- Enables static type checking with tools like mypy
-- Improved code maintainability and refactoring confidence
-
-Contributors should maintain type hints with all new code or modifications.
+This project uses Python's type hint system throughout the codebase. Contributors should maintain type hints with all new code or modifications.
 
 ## Testing
 
@@ -267,70 +219,27 @@ When adding new features, please include appropriate tests to maintain code qual
 
 ## Personalized Relevance Scoring
 
-When using the scoring feature, the application leverages Claude AI to calculate relevance scores for stories based on the prompt template in the `prompts/` directory.
+The application can use Claude AI to calculate relevance scores for stories based on how well they match your interests.
 
-- Default interest categories (defined in `prompts/story_relevance.txt`):
-  - Programming and software development
-  - AI, machine learning, and LLMs
-  - Linux, Emacs, NixOS
-  - Computer science theory and algorithms
-  - Cybersecurity, hacking techniques, and security vulnerabilities
-  - Science fiction concepts and technology
-  - Hardware hacking and electronics
-  - Systems programming and low-level computing
-  - Novel computing paradigms and research
-  - Tech history and vintage computing
-  - Mathematics and computational theory
-  - Cool toys and gadgets
-  - Climate Change and Mitigation
-
-To customize these interests, edit the template file in the `prompts/` directory or create your own custom template and use it with the `--story-prompt` option.
-
-Each story receives a relevance score from 0-100 indicating how well it matches your interests:
-- 0-25: Not relevant
-- 26-50: Slightly relevant
-- 51-75: Moderately relevant
-- 76-100: Highly relevant
+- Default interest categories are defined in `prompts/story_relevance.txt`
+- Scores range from 0-100, where higher scores indicate better matches to your interests
+- You can customize interests by editing the template file or creating your own
 
 ### Customizing Prompt Template
 
-The application supports a customizable prompt template for Claude AI classification. This allows you to tailor the interest categories to your own preferences without modifying code:
+You can tailor the interest categories to your preferences:
 
-1. **Default template file** is located in the `prompts/` directory:
-   - `story_relevance.txt`: Template for classifying stories
-
-2. **Using custom template**:
+1. Edit the default template in `prompts/story_relevance.txt`
+2. Or use a custom template:
    ```bash
-   # Use custom prompt template with the score command
-   hn-poll score --story-prompt /path/to/your/story_template.txt
+   hn-poll score --story-prompt /path/to/your/template.txt
+   ```
+3. You can also set this path using an environment variable:
+   ```bash
+   export HN_STORY_PROMPT_FILE=/path/to/your/template.txt
    ```
 
-3. **Environment variable**:
-   You can also set this path using an environment variable:
-   ```bash
-   export HN_STORY_PROMPT_FILE=/path/to/your/story_template.txt
-   hn-poll score
-   ```
-
-4. **Template guidelines**:
-   - Keep the format consistent - the template should instruct Claude to return a single integer between 0-100
-   - Maintain clear interest categories that Claude can evaluate against
-   - Edit the examples of interests to match your preferences
-
-**Key advantages of the relevance score system:**
-- Scores are persisted in the database, minimizing redundant API calls
-- The Anthropic API is only called for stories without existing scores
-- API failures are handled gracefully - existing relevance scores are preserved in case of API errors
-- Users can adjust the relevance threshold to be more or less selective
-- Scores are displayed with each story, providing insight into the filtering system
-- Batch processing with asynchronous requests for performance
-
-The optimized relevance scoring system employs several strategies to minimize API usage:
-1. **Database Persistence**: Scores are stored in the database so they only need to be calculated once
-2. **Batch Processing**: Processes multiple stories concurrently for efficiency
-3. **Separation of Concerns**: Clear separation between fetching, scoring, and displaying
-
-Claude analyzes story titles, URLs, and optionally article content to determine relevance scores. This provides a personalized feed of only the stories you're likely to find interesting, while efficiently using the AI service.
+The scoring system only calls the Anthropic API for stories without existing scores and stores results in the database to minimize redundant API calls.
 
 ### Sync Command: Save stories to Readwise Reader
 
@@ -444,4 +353,4 @@ A typical workflow might look like this:
    - `--batch-size N`: Number of stories to check in each cleanup batch (default: 50)
    - `--max-batches N`: Maximum number of batches for cleanup (default: 5)
 
-This separation of concerns allows for more efficient API usage and clearer operation. The shell script provides a convenient way to automate the entire workflow with a single command.
+The shell script automates the entire workflow with a single command.
