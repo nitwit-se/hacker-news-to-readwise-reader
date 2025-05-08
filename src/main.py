@@ -582,6 +582,27 @@ def cmd_clean(args: argparse.Namespace) -> int:
         
     return 0
 
+def print_usage_summary() -> None:
+    """Print a concise summary of available commands."""
+    print("""
+Hacker News Poller - Fetch, filter, and sync top stories
+
+Available commands:
+  fetch   - Fetch new stories from Hacker News
+  score   - Calculate relevance scores for unscored stories
+  show    - Display stories meeting criteria
+  sync    - Sync high-quality stories to Readwise Reader
+  clean   - Clean the database of non-existent stories
+
+Examples:
+  hn-poll                       - Show top stories with default settings
+  hn-poll fetch --source best   - Fetch stories from 'best' feed
+  hn-poll score --extract-content - Score stories with full content extraction
+  hn-poll sync --min-score 50   - Sync stories with score >= 50 to Readwise
+
+Use 'hn-poll <command> --help' for detailed help on a specific command.
+""")
+
 def main() -> int:
     """Main entry point for the program.
     
@@ -591,7 +612,7 @@ def main() -> int:
     # Create the top-level parser
     parser = argparse.ArgumentParser(
         description='Hacker News story poller and relevance filter',
-        epilog='Run without a command or with "show" to display stories'
+        epilog='Run with a specific command or use --help for more information'
     )
     
     # Create subparsers for each command
@@ -666,15 +687,10 @@ def main() -> int:
         # Initialize the database in any case
         init_db()
         
-        # If no command specified, default to 'show'
+        # If no command specified, show the usage summary instead of defaulting to 'show'
         if not args.command:
-            # Create default args for show command
-            args.hours = 24  # Default hours
-            args.min_score = 30  # Default min score
-            args.min_relevance = 75  # Default min relevance
-            args.hn_weight = 0.7  # Default HN weight
-            args.min_comments = 30  # Default min comments
-            return cmd_show(args)
+            print_usage_summary()
+            return 0
         
         # Otherwise, run the appropriate command
         return args.func(args)
