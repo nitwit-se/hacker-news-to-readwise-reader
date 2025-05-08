@@ -332,12 +332,8 @@ def sync_with_readwise(hours: int = 24, min_hn_score: int = 30, min_relevance: i
         print(f"Found and removing {len(none_relevance)} stories with None relevance_score...")
         stories = [s for s in stories if s.get('relevance_score') is not None]
         
-    # Make sure all stories have relevance_score >= min_relevance
-    if min_relevance is not None:
-        low_relevance = [s for s in stories if s.get('relevance_score', 0) < min_relevance]
-        if low_relevance:
-            print(f"Found and removing {len(low_relevance)} stories with relevance_score < {min_relevance}...")
-            stories = [s for s in stories if s.get('relevance_score', 0) >= min_relevance]
+    # Note: min_relevance filter has already been applied by get_unsynced_stories
+    # We don't need to filter again, as this was causing inconsistencies with the database logic
     
     if not stories:
         print("No unsynced stories found matching your criteria.")

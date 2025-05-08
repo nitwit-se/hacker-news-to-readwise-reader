@@ -672,8 +672,12 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     
+    # Apply the default minimum relevance threshold if not specified
+    if min_relevance is None:
+        min_relevance = 75
+    
     # Build the query
-    query_parts = ['SELECT * FROM stories WHERE readwise_synced = 0 OR readwise_synced IS NULL']
+    query_parts = ['SELECT * FROM stories WHERE (readwise_synced = 0 OR readwise_synced IS NULL)']
     params = []
     
     # Add time filter if specified - This is critical to ensure proper filtering by time
@@ -699,29 +703,17 @@ def get_unsynced_stories(hours: Optional[int] = None, min_score: int = 0, min_re
     # IMPORTANT: Always require a non-NULL relevance score
     query_parts.append('AND relevance_score IS NOT NULL')
     
-    # Always apply minimum relevance threshold - default should be 75 if not specified
-    # This ensures we only sync high-quality stories
-    if min_relevance is not None:
-        query_parts.append('AND relevance_score >= ?')
-        params.append(min_relevance)
-    else:
-        # If min_relevance is not specified, use a sensible default of 75
-        # to avoid syncing low-quality stories
-        query_parts.append('AND relevance_score >= 75')
-    
-    # Remove the URL check to allow all stories (we'll handle missing URLs in the sync code)
-    # query_parts.append('AND url IS NOT NULL AND url != ""')
+    # Always apply minimum relevance threshold
+    query_parts.append('AND relevance_score >= ?')
+    params.append(min_relevance)
     
     # Add ordering - prioritize story quality over recency
     # When relevance filtering is enabled, use relevance in the sorting
-    if min_relevance is not None:
-        query_parts.append('ORDER BY score DESC, relevance_score DESC, comments DESC')
-    else:
-        # When relevance filtering is disabled, just use score and comments
-        query_parts.append('ORDER BY score DESC, comments DESC')
+    query_parts.append('ORDER BY score DESC, relevance_score DESC, comments DESC')
     
     # Execute query
-    cursor.execute(' '.join(query_parts), tuple(params))
+    full_query = ' '.join(query_parts)
+    cursor.execute(full_query, tuple(params))
     
     rows = cursor.fetchall()
     stories = [dict(row) for row in rows]

@@ -122,7 +122,7 @@ class TestReadwiseDbFunctions:
             # Test with no explicit min_relevance (should default to 75)
             stories = get_unsynced_stories(min_comments=0)  # Set min_comments=0 to match test data
             
-            # All stories should have relevance >= 75 
+            # All stories should have relevance >= 75 (per the default in get_unsynced_stories)
             for story in stories:
                 assert story['relevance_score'] >= 75
                 

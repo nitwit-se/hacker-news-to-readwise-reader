@@ -165,6 +165,8 @@ uv pip install new-package-name
 
 NEVER use pip directly in this project as it would bypass uv's dependency resolution.
 
+This project uses "uv" for the virtual environment - so any command run by Claude Code that needs the venv should be prefixed with "uv run" in order to load the environment.
+
 ### Type Hints Policy
 
 All code in this project uses Python type hints to improve code quality and maintainability:

@@ -17,7 +17,7 @@ if classifier_module_exists:
         get_relevance_score, is_interesting, 
         get_domain_relevance_score, get_relevance_score_async,
         process_story_batch_async, load_prompt_template,
-        STORY_PROMPT_TEMPLATE, DOMAIN_PROMPT_TEMPLATE
+        STORY_PROMPT_TEMPLATE
     )
 
 from tests.fixtures.mock_anthropic import mock_anthropic, mock_async_anthropic

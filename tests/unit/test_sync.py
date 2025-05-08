@@ -83,7 +83,15 @@ def test_sync_with_readwise_max_stories(mock_db_path, monkeypatch):
     conn.commit()
     conn.close()
     
-    # Mock the batch_add_to_readwise function to verify it's called with the right number of stories
+    # Mock the get_unsynced_stories function to return filtered stories
+    mock_unsynced = MagicMock(return_value=[
+        {"id": 1000, "title": "Test Story 1", "url": "https://example.com/1", "score": 50, "relevance_score": 80},
+        {"id": 1001, "title": "Test Story 2", "url": "https://example.com/2", "score": 51, "relevance_score": 81},
+        {"id": 1002, "title": "Test Story 3", "url": "https://example.com/3", "score": 52, "relevance_score": 82}
+    ])
+    monkeypatch.setattr('src.main.get_unsynced_stories', mock_unsynced)
+    
+    # Mock the batch_add_to_readwise function
     mock_batch_add = MagicMock(return_value=([1000, 1001, 1002], []))
     monkeypatch.setattr('src.main.batch_add_to_readwise', mock_batch_add)
     
@@ -186,6 +194,20 @@ def test_sync_with_readwise_without_max_stories(mock_db_path, monkeypatch):
     
     conn.commit()
     conn.close()
+    
+    # Mock the get_unsynced_stories function to return filtered stories
+    stories = []
+    for i in range(10):
+        stories.append({
+            "id": 2000 + i, 
+            "title": f"Test Story {i}", 
+            "url": f"https://example.com/test-{i}", 
+            "score": 50 + i, 
+            "relevance_score": 80 + i
+        })
+    
+    mock_unsynced = MagicMock(return_value=stories)
+    monkeypatch.setattr('src.main.get_unsynced_stories', mock_unsynced)
     
     # Mock the batch_add_to_readwise function
     mock_batch_add = MagicMock(return_value=([2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009], []))
