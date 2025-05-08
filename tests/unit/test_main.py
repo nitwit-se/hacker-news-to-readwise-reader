@@ -484,24 +484,27 @@ def test_cmd_show(monkeypatch):
 
 @pytest.mark.unit
 def test_main_no_command(monkeypatch):
-    """Test main function with no command (should default to show)."""
+    """Test main function with no command (should show usage summary)."""
     # Mock argparse to return args with no command
     mock_parser = MagicMock()
     mock_parser.parse_args.return_value.command = None
     monkeypatch.setattr('argparse.ArgumentParser', lambda **kwargs: mock_parser)
     
-    # Mock cmd_show to avoid actual command execution
-    mock_show = MagicMock(return_value=0)
-    monkeypatch.setattr('src.main.cmd_show', mock_show)
+    # Mock print_usage_summary to avoid actual printing
+    mock_usage = MagicMock()
+    monkeypatch.setattr('src.main.print_usage_summary', mock_usage)
     
     # Mock init_db to avoid database initialization
     mock_init_db = MagicMock()
     monkeypatch.setattr('src.main.init_db', mock_init_db)
     
-    result = main()
+    # Mock print to avoid console output
+    with patch('builtins.print'):
+        result = main()
     
     assert result == 0
-    assert mock_show.called
+    assert mock_usage.called
+    assert mock_usage.call_count == 1
 
 
 @pytest.mark.unit
