@@ -1,0 +1,17 @@
+# Run the Hacker News syncing script every hour
+# This will run silently but log everything to ~/.hn-sync/logs/hn_sync.log
+# Errors will still be emailed by cron
+
+# Set necessary environment variables
+ANTHROPIC_API_KEY=your_api_key_here
+READWISE_API_KEY=your_api_key_here
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+
+# Run every hour at minute 15
+15 * * * * /absolute/path/to/hackernews/cron_sync.sh --cleanup
+
+# Run with custom parameters (example)
+# 30 */2 * * * /absolute/path/to/hackernews/cron_sync.sh --hours 3 --min-score 50 --max-stories 10 --source best
+
+# To view or monitor logs:
+# tail -f ~/.hn-sync/logs/hn_sync.log
