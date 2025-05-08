@@ -48,17 +48,39 @@ log_success() {
 }
 
 # Rotate log file if it gets too large (> 1MB)
-if [ -f "$LOG_FILE" ] && [ $(stat -f%z "$LOG_FILE") -gt 1048576 ]; then
-  # Compress and move the current log to log.1.gz, log.2.gz, etc.
-  for i in {4..1}; do
-    if [ -f "$LOG_FILE.$i.gz" ]; then
-      mv "$LOG_FILE.$i.gz" "$LOG_FILE.$((i+1)).gz"
+# Use a cross-platform way to check file size
+get_file_size() {
+  if command -v stat &>/dev/null; then
+    # Try GNU stat (Linux)
+    if stat --version &>/dev/null 2>&1; then
+      stat --format="%s" "$1" 2>/dev/null
+    # Try BSD stat (macOS)
+    elif stat -f%z "$1" &>/dev/null 2>&1; then
+      stat -f%z "$1"
+    else
+      # Fallback: use wc -c
+      wc -c < "$1"
     fi
-  done
-  if [ -f "$LOG_FILE" ]; then
-    gzip -c "$LOG_FILE" > "$LOG_FILE.1.gz"
-    : > "$LOG_FILE"  # Clear the log file
-    log_info "Log file rotated"
+  else
+    # Fallback: use wc -c
+    wc -c < "$1"
+  fi
+}
+
+if [ -f "$LOG_FILE" ]; then
+  file_size=$(get_file_size "$LOG_FILE")
+  if [ -n "$file_size" ] && [ "$file_size" -gt 1048576 ]; then
+    # Compress and move the current log to log.1.gz, log.2.gz, etc.
+    for i in {4..1}; do
+      if [ -f "$LOG_FILE.$i.gz" ]; then
+        mv "$LOG_FILE.$i.gz" "$LOG_FILE.$((i+1)).gz"
+      fi
+    done
+    if [ -f "$LOG_FILE" ]; then
+      gzip -c "$LOG_FILE" > "$LOG_FILE.1.gz"
+      : > "$LOG_FILE"  # Clear the log file
+      log_info "Log file rotated"
+    fi
   fi
 fi
 
