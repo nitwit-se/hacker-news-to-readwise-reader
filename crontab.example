@@ -2,16 +2,22 @@
 # This will run silently but log everything to ~/.hn-sync/logs/hn_sync.log
 # Errors will still be emailed by cron
 
-# Set necessary environment variables
+# Set necessary environment variables (replace with your actual values)
 ANTHROPIC_API_KEY=your_api_key_here
 READWISE_API_KEY=your_api_key_here
-PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/opt/python/libexec/bin
+
+# Define project directory (replace with your actual path)
+PROJECT_DIR=/Users/mark/priv/hackernews
 
 # Run every hour at minute 15
-15 * * * * /absolute/path/to/hackernews/cron_sync.sh --cleanup
+15 * * * * cd $PROJECT_DIR && ./cron_sync.sh --cleanup
+
+# Alternative method with single quotes to avoid variable expansion in crontab
+# 15 * * * * cd '/Users/mark/priv/hackernews' && ./cron_sync.sh --cleanup
 
 # Run with custom parameters (example)
-# 30 */2 * * * /absolute/path/to/hackernews/cron_sync.sh --hours 3 --min-score 50 --max-stories 10 --source best
+# 30 */2 * * * cd $PROJECT_DIR && ./cron_sync.sh --hours 3 --min-score 50 --max-stories 10 --source best
 
 # To view or monitor logs:
 # tail -f ~/.hn-sync/logs/hn_sync.log
